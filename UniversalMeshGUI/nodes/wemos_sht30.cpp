@@ -98,6 +98,45 @@ void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
                       coordinatorMac[0], coordinatorMac[1], coordinatorMac[2],
                       coordinatorMac[3], coordinatorMac[4], coordinatorMac[5]);
     }
+
+    bool directToMe = (memcmp(packet->destMac, myMac, 6) == 0);
+    if (packet->type == MESH_TYPE_DATA && directToMe) {
+        char msg[65];
+        uint8_t len = packet->payloadLen > 64 ? 64 : packet->payloadLen;
+        memcpy(msg, packet->payload, len);
+        msg[len] = '\0';
+
+        Serial.printf("[RX->ME] From %02X:%02X:%02X:%02X:%02X:%02X | Relay %02X:%02X:%02X:%02X:%02X:%02X | App 0x%02X | %s\n",
+                      packet->srcMac[0], packet->srcMac[1], packet->srcMac[2],
+                      packet->srcMac[3], packet->srcMac[4], packet->srcMac[5],
+                      senderMac[0], senderMac[1], senderMac[2],
+                      senderMac[3], senderMac[4], senderMac[5],
+                      packet->appId, msg);
+
+        if (len >= 4 && strncmp(msg, "cmd:", 4) == 0) {
+            bool fromCoordinator = foundCoordinator && (memcmp(packet->srcMac, coordinatorMac, 6) == 0);
+            if (fromCoordinator) {
+                const char* command = msg + 4;
+                char ack[65];
+                snprintf(ack, sizeof(ack), "command received:%s", command);
+                mesh.send(packet->srcMac, MESH_TYPE_DATA, packet->appId, (const uint8_t*)ack, strlen(ack), 4);
+                Serial.printf("[CMD] Ack sent to %02X:%02X:%02X:%02X:%02X:%02X | %s\n",
+                              packet->srcMac[0], packet->srcMac[1], packet->srcMac[2],
+                              packet->srcMac[3], packet->srcMac[4], packet->srcMac[5],
+                              ack);
+
+                if (strcmp(command, "reboot") == 0) {
+                    Serial.println("[CMD] Reboot requested, restarting...");
+                    delay(100);
+                    ESP.restart();
+                }
+            } else {
+                Serial.printf("[CMD] Ignored unauthorized command from %02X:%02X:%02X:%02X:%02X:%02X\n",
+                              packet->srcMac[0], packet->srcMac[1], packet->srcMac[2],
+                              packet->srcMac[3], packet->srcMac[4], packet->srcMac[5]);
+            }
+        }
+    }
 }
 
 void setup() {

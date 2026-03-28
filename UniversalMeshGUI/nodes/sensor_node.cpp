@@ -57,6 +57,11 @@ void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
                 packet->srcMac[0], packet->srcMac[1], packet->srcMac[2],
                 packet->srcMac[3], packet->srcMac[4], packet->srcMac[5],
                 ack);
+        if (strcmp(command, "reboot") == 0) {
+          Serial.println("[CMD] Reboot requested, restarting...");
+          delay(100);
+          ESP.restart();
+        }
       } else {
         Serial.printf("[CMD] Ignored unauthorized command from %02X:%02X:%02X:%02X:%02X:%02X\n",
                 packet->srcMac[0], packet->srcMac[1], packet->srcMac[2],

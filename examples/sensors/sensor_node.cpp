@@ -1,8 +1,12 @@
 #include <Arduino.h>
-#include <esp_wifi.h>
+#if defined(ESP32)
+  #include <esp_wifi.h>
+#endif
 #include "UniversalMesh.h"
 
-#define nodeName "sensor-esp32"
+#ifndef NODE_NAME
+  #define NODE_NAME "sensor-node"
+#endif
 #define WIFI_CHANNEL        1
 #define HEARTBEAT_INTERVAL  60000
 #define TEMP_INTERVAL       30000
@@ -17,16 +21,54 @@ unsigned long lastTemp      = 0;
 
 void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
     // If we receive a PONG, we assume it's the Coordinator replying to our discovery ping
-    if (packet->type == MESH_TYPE_PONG && !foundCoordinator) {
+  if (packet->type == MESH_TYPE_PONG && packet->payloadLen > 0 && packet->payload[0] == 0x01 && !foundCoordinator) {
         memcpy(coordinatorMac, packet->srcMac, 6);
         foundCoordinator = true;
         lastHeartbeat = millis() - HEARTBEAT_INTERVAL;  // fire both immediately
-        mesh.send(coordinatorMac, MESH_TYPE_DATA, 0x06, (const uint8_t*)nodeName, strlen(nodeName), 4);
+        mesh.send(coordinatorMac, MESH_TYPE_DATA, 0x06, (const uint8_t*)NODE_NAME, strlen(NODE_NAME), 4);
         lastTemp      = millis() - TEMP_INTERVAL;
         Serial.printf("[AUTO] Coordinator found at: %02X:%02X:%02X:%02X:%02X:%02X\n",
                       coordinatorMac[0], coordinatorMac[1], coordinatorMac[2],
                       coordinatorMac[3], coordinatorMac[4], coordinatorMac[5]);
     }
+
+  bool directToMe = (memcmp(packet->destMac, myMac, 6) == 0);
+  if (packet->type == MESH_TYPE_DATA && directToMe) {
+    char msg[65];
+    uint8_t len = packet->payloadLen > 64 ? 64 : packet->payloadLen;
+    memcpy(msg, packet->payload, len);
+    msg[len] = '\0';
+
+    Serial.printf("[RX->ME] From %02X:%02X:%02X:%02X:%02X:%02X | Relay %02X:%02X:%02X:%02X:%02X:%02X | App 0x%02X | %s\n",
+            packet->srcMac[0], packet->srcMac[1], packet->srcMac[2],
+            packet->srcMac[3], packet->srcMac[4], packet->srcMac[5],
+            senderMac[0], senderMac[1], senderMac[2],
+            senderMac[3], senderMac[4], senderMac[5],
+            packet->appId, msg);
+
+    if (len >= 4 && strncmp(msg, "cmd:", 4) == 0) {
+      bool fromCoordinator = foundCoordinator && (memcmp(packet->srcMac, coordinatorMac, 6) == 0);
+      if (fromCoordinator) {
+        const char* command = msg + 4;
+        char ack[65];
+        snprintf(ack, sizeof(ack), "command received:%s", command);
+        mesh.send(packet->srcMac, MESH_TYPE_DATA, packet->appId, (const uint8_t*)ack, strlen(ack), 4);
+        Serial.printf("[CMD] Ack sent to %02X:%02X:%02X:%02X:%02X:%02X | %s\n",
+                packet->srcMac[0], packet->srcMac[1], packet->srcMac[2],
+                packet->srcMac[3], packet->srcMac[4], packet->srcMac[5],
+                ack);
+        if (strcmp(command, "reboot") == 0) {
+          Serial.println("[CMD] Reboot requested, restarting...");
+          delay(100);
+          ESP.restart();
+        }
+      } else {
+        Serial.printf("[CMD] Ignored unauthorized command from %02X:%02X:%02X:%02X:%02X:%02X\n",
+                packet->srcMac[0], packet->srcMac[1], packet->srcMac[2],
+                packet->srcMac[3], packet->srcMac[4], packet->srcMac[5]);
+      }
+    }
+  }
 }
 
 void setup() {
@@ -38,7 +80,11 @@ void setup() {
         mesh.onReceive(onMeshMessage);
 
         uint8_t mac[6];
-        esp_wifi_get_mac(WIFI_IF_STA, mac);
+        #if defined(ESP32)
+          esp_wifi_get_mac(WIFI_IF_STA, mac);
+        #else
+          WiFi.macAddress(mac);
+        #endif
         memcpy(myMac, mac, 6);
 
         Serial.println();
@@ -72,18 +118,22 @@ void loop() {
             lastHeartbeat = now;
             uint8_t heartbeat = 0x01;
             mesh.send(coordinatorMac, MESH_TYPE_DATA, 0x05, &heartbeat, 1, 4);
-            mesh.send(coordinatorMac, MESH_TYPE_DATA, 0x06, (const uint8_t*)nodeName, strlen(nodeName), 4);
+            mesh.send(coordinatorMac, MESH_TYPE_DATA, 0x06, (const uint8_t*)NODE_NAME, strlen(NODE_NAME), 4);
             Serial.printf("[TX] Heartbeat sent | MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
                           myMac[0], myMac[1], myMac[2], myMac[3], myMac[4], myMac[5]);
         }
 
         if (now - lastTemp >= TEMP_INTERVAL) {
             lastTemp = now;
+            #if defined(ESP8266)
+            float tempC = 18.0f + (rand() % 100) / 10.0f;
+            #else
             float tempC = temperatureRead();
+            #endif
             char payload[48];
-            snprintf(payload, sizeof(payload), "T:%.1fC", tempC);
+            snprintf(payload, sizeof(payload), "N:%s,T:%.1fC", NODE_NAME, tempC);
             mesh.send(coordinatorMac, MESH_TYPE_DATA, 0x01, (const uint8_t*)payload, strlen(payload), 4);
-            Serial.printf("[TX] Temperature: %s\n", payload);
+            Serial.printf("[TX] Sensor: %s\n", payload);
         }
     }
     else if (millis() - lastAttempt > 10000) {
