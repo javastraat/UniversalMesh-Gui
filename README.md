@@ -46,7 +46,7 @@
 - **Hybrid Coordinator:** Bridge your mesh to the internet via Wi-Fi or Ethernet.
 - **Node Announce:** Sensors broadcast their name on boot and heartbeat; coordinator stores and displays it.
 - **MQTT Bridge:** Coordinator automatically forwards mesh data to an MQTT broker (ETH Elite).
-- **Real-Time Web Dashboard:** Live SSE-pushed updates — no polling. Packet log, node table, topology map and serial console update the instant a packet arrives.
+- **Real-Time Web Dashboard:** Live updates with a fast polling loop for packet log, node table, topology map and serial console.
 - **Force-Directed Topology Map:** Visual graph of the mesh — nodes and relay paths inferred from packet headers, animated in real-time.
 - **NTP Time Sync:** Coordinator syncs to NTP; packet timestamps shown as wall-clock time in the dashboard.
 - **PWA Support:** Dashboard is installable on mobile as a standalone app (iOS & Android).
@@ -223,7 +223,7 @@ Each sensor node:
 ## Remote Commands
 
 Commands can be sent from the dashboard **Send Message** panel (pick from the **Cmd** dropdown or type freely) or via the `/api/tx` REST endpoint.  
-Commands are plain-text `cmd:<name>` strings addressed to a specific node MAC. Nodes only execute commands whose `srcMac` matches the coordinator — senders with an unknown MAC are silently ignored.
+Commands are plain-text `cmd:<name>` strings addressed to a specific node MAC. Nodes only execute commands whose `srcMac` matches the coordinator; unauthorized senders are ignored for execution (and logged on the node serial output).
 
 For every recognised command the node sends an ACK first:
 
@@ -275,15 +275,16 @@ The coordinator serves a responsive single-page dashboard on port 80.
 | **Ethernet** | Status, IP, subnet, gateway, DNS, MAC, link speed/duplex *(ETH Elite only)* |
 | **Mesh Nodes** | Live list of known nodes — MAC, last-seen counter, resolved name. Coordinator always pinned at top. Click **Node** or **Last Seen** column header to sort. Green dot = seen <120 s, red = stale |
 | **Mesh Channel** | Dropdown to switch ESP-NOW channel (1–13), persisted to NVS *(ETH Elite only)* |
-| **Send Message** | Inject a text packet to any node or broadcast directly from the browser |
+| **Send Message** | Inject a text packet to any node or broadcast directly from the browser. Includes command presets (`cmd:info`, `cmd:info:long`, `cmd:reboot`) plus free-text mode |
 | **Packet Log** | Paginated live log (200 entries with PSRAM, 10 without). Shows type, sender, app ID, payload, timestamp. Relayed packets highlighted |
 | **Topology Map** | Force-directed canvas graph of all nodes and relay paths, inferred from packet headers. Click a node for details. Controls: Freeze/Resume physics, Reset layout, toggle MAC labels, toggle edge age labels, drag to pin a node, double-click to unpin, pan by dragging background, export as PNG |
 | **Serial Console** | Live stream of the coordinator's internal log — like a web-based serial monitor |
+| **Quick Actions (navbar)** | Ping all nodes (discovery), toggle topology panel, toggle serial console panel, reboot coordinator, toggle dark/light theme |
 
 ### UI Features
 
-- **SSE push** — the browser opens a single `GET /api/events` stream; the ESP32 pushes `packet` and `serial` events the instant they happen. No polling for the log, topology or console.
-- **Dark / light theme** toggle, persisted in `localStorage`
+- **Fast/slow polling model** — dashboard uses periodic fetches (`/api/nodes` + `/api/log` every 1 s, `/api/status` every 5 s, `/api/serial` every 2 s while console is open).
+- **Dark / light theme** toggle (preference stored in `localStorage`)
 - **Installable PWA** — add to home screen on iOS/Android for a standalone app experience
 - **NTP timestamps** — packet log shows wall-clock time (e.g. `23:18:12`) instead of a relative counter when NTP is synced
 
@@ -291,7 +292,6 @@ The coordinator serves a responsive single-page dashboard on port 80.
 
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
-| `/api/events` | GET (SSE) | Server-Sent Events stream — `packet` and `serial` event types |
 | `/api/status` | GET | Coordinator status (uptime, heap, IP, channel, NTP time, ETH info) |
 | `/api/nodes` | GET | Node table (MAC, last-seen seconds, name) |
 | `/api/log` | GET | Recent packet log (type, src, origSrc, appId, payload, age) |
