@@ -304,8 +304,33 @@ R"rawliteral(
     let logPackets_=[];
     let coordMac_='';
     let nodeNames_={};
+    let _destNodeSig='';
     let nodeSort_={col:'seen',asc:true};
     let lastNodes_=[];
+
+    function nodeIdentitySignature(nodes){
+      if(!nodes||!nodes.length) return '';
+      return nodes
+        .filter(n=>n&&n.mac)
+        .map(n=>((n.mac||'').toUpperCase())+'|'+(n.name||''))
+        .sort()
+        .join('||');
+    }
+
+    function rebuildDestSelect(nodes){
+      const destSel=document.getElementById('msg-dest');
+      if(!destSel) return;
+      const prevDest=destSel.value;
+      destSel.innerHTML='<option value="FF:FF:FF:FF:FF:FF">Broadcast \u2014 FF:FF:FF:FF:FF:FF</option>';
+      if(nodes) nodes.filter(n=>n.mac.toUpperCase()!==coordMac_).forEach(n=>{
+        const opt=document.createElement('option');
+        opt.value=n.mac;
+        opt.textContent=(n.name||n.mac)+(n.name?' \u2014 '+n.mac:'');
+        destSel.appendChild(opt);
+      });
+      if([...destSel.options].some(o=>o.value===prevDest)) destSel.value=prevDest;
+    }
+
     function sortNodes(col){
       if(nodeSort_.col===col) nodeSort_.asc=!nodeSort_.asc;
       else{ nodeSort_.col=col; nodeSort_.asc=(col==='seen'); }
@@ -670,17 +695,15 @@ function fixCoord(){
         ]);
         renderNodes(nd.nodes||[]);
         nodeNames_={};
-        if(nd.nodes) nd.nodes.forEach(n=>{ if(n.name) nodeNames_[n.mac.toUpperCase()]=n.name; });
+        const nodes=nd.nodes||[];
+        if(nodes) nodes.forEach(n=>{ if(n.name) nodeNames_[n.mac.toUpperCase()]=n.name; });
+        const newSig=nodeIdentitySignature(nodes.filter(n=>n.mac.toUpperCase()!==coordMac_));
         const destSel=document.getElementById('msg-dest');
-        const prevDest=destSel.value;
-        destSel.innerHTML='<option value="FF:FF:FF:FF:FF:FF">Broadcast \u2014 FF:FF:FF:FF:FF:FF</option>';
-        if(nd.nodes) nd.nodes.filter(n=>n.mac.toUpperCase()!==coordMac_).forEach(n=>{
-          const opt=document.createElement('option');
-          opt.value=n.mac;
-          opt.textContent=(n.name||n.mac)+(n.name?' \u2014 '+n.mac:'');
-          destSel.appendChild(opt);
-        });
-        if([...destSel.options].some(o=>o.value===prevDest)) destSel.value=prevDest;
+        const destIsFocused=destSel&&document.activeElement===destSel;
+        if(newSig!==_destNodeSig && !destIsFocused){
+          rebuildDestSelect(nodes);
+          _destNodeSig=newSig;
+        }
         const _fetchNow=Date.now();
         logPackets_=lg.packets?lg.packets.slice().reverse().map(p=>({...p,_time:new Date(_fetchNow-p.age_s*1000)})):[];
         renderLog();
