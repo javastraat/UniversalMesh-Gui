@@ -1,14 +1,11 @@
 # UniversalMesh GUI (v1.0.0)
 
-UniversalMesh GUI uses UniversalMesh library by https://github.com/johestephan/UniversalMesh
-
-A lightweight, Layer-3 mesh networking protocol built on top of ESP-NOW for ESP32 and ESP8266. Enables seamless, long-range communication between nodes without a central Wi-Fi router.
-made by https://github.com/johestephan/UniversalMesh
+**UniversalMesh GUI** is a ready-to-flash firmware collection for coordinators and sensor nodes, built on top of the [UniversalMesh](https://github.com/johestephan/UniversalMesh) mesh networking library. It provides a full-stack solution: node firmware that auto-discovers the coordinator and sends sensor data over ESP-NOW, and a coordinator firmware that bridges the mesh to your network and serves a real-time web dashboard — all without writing any code.
 
 ## Table of Contents
 
 - [Features](#features)
-- [Architecture](#architecture)
+- [Protocol Architecture](#protocol-architecture)
   - [Packet Structure](#packet-structure)
   - [Packet Type Reference](#packet-type-reference)
   - [AppId Reference](#appid-reference)
@@ -36,10 +33,15 @@ made by https://github.com/johestephan/UniversalMesh
 
 ## Features
 
+### Mesh Protocol (via UniversalMesh library)
 - **Auto-Relay:** Every node acts as a repeater (TTL-based) to extend range.
 - **Self-Healing:** No fixed routing tables; packets find their path through broadcast/rebroadcast.
 - **Transparent Discovery:** Built-in PING/PONG handling for network mapping.
 - **De-duplication:** Prevents broadcast storms using unique Message IDs.
+
+### GUI / Firmware (this project)
+- **Ready-to-Flash Firmware:** Pre-built coordinator and sensor node firmware for a range of ESP32 and ESP8266 boards — no library integration needed.
+- **Remote Commands:** Send `cmd:reboot`, `cmd:info`, `cmd:info:long` from the dashboard to any node; node replies with ACK and data.
 - **Hybrid Coordinator:** Bridge your mesh to the internet via Wi-Fi or Ethernet.
 - **Node Announce:** Sensors broadcast their name on boot and heartbeat; coordinator stores and displays it.
 - **MQTT Bridge:** Coordinator automatically forwards mesh data to an MQTT broker (ETH Elite).
@@ -50,7 +52,9 @@ made by https://github.com/johestephan/UniversalMesh
 
 ---
 
-## Architecture
+## Protocol Architecture
+
+> Reference for the underlying [UniversalMesh](https://github.com/johestephan/UniversalMesh) library. Understanding this is useful for extending node firmware or building custom integrations.
 
 The network consists of a **Coordinator** (the bridge) and multiple **Sensor Nodes**.
 

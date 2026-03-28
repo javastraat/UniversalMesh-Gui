@@ -183,6 +183,15 @@ R"rawliteral(
         </select>
       </div>
       <div class="row" style="margin-bottom:8px">
+        <span class="lbl">Cmd</span>
+        <select id="msg-cmd" class="sel" style="flex:1;min-width:0" onchange="applyMsgCmd(this.value)">
+          <option value="">— free input —</option>
+          <option value="cmd:info">cmd:info</option>
+          <option value="cmd:info:long">cmd:info:long</option>
+          <option value="cmd:reboot">cmd:reboot</option>
+        </select>
+      </div>
+      <div class="row" style="margin-bottom:8px">
         <span class="lbl">Text</span>
         <input id="msg-text" class="sel" style="flex:1;min-width:0" placeholder="Hello mesh..." maxlength="64" onkeydown="if(event.key==='Enter')sendMsg()">
       </div>
@@ -239,6 +248,19 @@ R"rawliteral(
       try{ await fetch('/api/reboot',{method:'POST'}); }catch(e){}
       btn.textContent='↺';btn.disabled=false;
     }
+    function applyMsgCmd(val){
+      const txt=document.getElementById('msg-text');
+      if(val===''){
+        txt.value='';
+        txt.readOnly=false;
+        txt.placeholder='Hello mesh...';
+        txt.style.opacity='';
+      } else {
+        txt.value=val;
+        txt.readOnly=true;
+        txt.style.opacity='0.65';
+      }
+    }
     async function sendMsg(){
       const text=document.getElementById('msg-text').value.trim();
       if(!text) return;
@@ -255,7 +277,10 @@ R"rawliteral(
         const d=await r.json();
         status.style.color='#28a745';
         status.textContent=d.status==='data_sent'?'Sent!':'Error';
-        if(d.status==='data_sent') document.getElementById('msg-text').value='';
+        if(d.status==='data_sent'){
+          const cmd=document.getElementById('msg-cmd');
+          if(cmd.value===''){document.getElementById('msg-text').value='';}
+        }
       }catch(e){
         status.style.color='#dc3545';
         status.textContent='Failed';

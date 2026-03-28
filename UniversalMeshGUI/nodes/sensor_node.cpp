@@ -18,33 +18,40 @@ bool foundCoordinator = false;
 unsigned long lastAttempt   = 0;
 unsigned long lastHeartbeat = 0;
 unsigned long lastTemp      = 0;
+bool pendingLongInfo = false;
+uint8_t longInfoDestMac[6] = {0, 0, 0, 0, 0, 0};
+uint8_t longInfoAppId = 0;
+uint8_t longInfoPart = 0;
+unsigned long lastLongInfoTx = 0;
+const unsigned long LONG_INFO_TX_INTERVAL = 40;
 
-static void sendLongInfo(uint8_t* destMac, uint8_t appId) {
+static bool sendLongInfoPart(uint8_t part, uint8_t* destMac, uint8_t appId) {
   char info[65];
 
-  snprintf(info, sizeof(info), "info1:n=%s,mac=%02X:%02X:%02X:%02X:%02X:%02X",
-           NODE_NAME,
-           myMac[0], myMac[1], myMac[2], myMac[3], myMac[4], myMac[5]);
-  mesh.send(destMac, MESH_TYPE_DATA, appId, (const uint8_t*)info, strlen(info), 4);
+  if (part == 0) {
+    snprintf(info, sizeof(info), "info1:n=%s,mac=%02X:%02X:%02X:%02X:%02X:%02X",
+             NODE_NAME,
+             myMac[0], myMac[1], myMac[2], myMac[3], myMac[4], myMac[5]);
+  } else if (part == 1) {
+    snprintf(info, sizeof(info), "info2:up=%lus,heap=%u,rssi=%d,ch=%d",
+             millis() / 1000UL,
+             ESP.getFreeHeap(),
+             WiFi.RSSI(),
+             WiFi.channel());
+  } else {
+  #if defined(ESP32)
+    snprintf(info, sizeof(info), "info3:chip=%s,rev=%d,sdk=%.24s",
+             ESP.getChipModel(),
+             ESP.getChipRevision(),
+             ESP.getSdkVersion());
+  #else
+    snprintf(info, sizeof(info), "info3:chip=ESP8266,id=%06X,sdk=%.20s",
+             ESP.getChipId(),
+             ESP.getSdkVersion());
+  #endif
+  }
 
-  snprintf(info, sizeof(info), "info2:up=%lus,heap=%u,rssi=%d,ch=%d",
-           millis() / 1000UL,
-           ESP.getFreeHeap(),
-           WiFi.RSSI(),
-           WiFi.channel());
-  mesh.send(destMac, MESH_TYPE_DATA, appId, (const uint8_t*)info, strlen(info), 4);
-
-#if defined(ESP32)
-  snprintf(info, sizeof(info), "info3:chip=%s,rev=%d,sdk=%.24s",
-           ESP.getChipModel(),
-           ESP.getChipRevision(),
-           ESP.getSdkVersion());
-#else
-  snprintf(info, sizeof(info), "info3:chip=ESP8266,id=%06X,sdk=%.20s",
-           ESP.getChipId(),
-           ESP.getSdkVersion());
-#endif
-  mesh.send(destMac, MESH_TYPE_DATA, appId, (const uint8_t*)info, strlen(info), 4);
+  return mesh.send(destMac, MESH_TYPE_DATA, appId, (const uint8_t*)info, strlen(info), 4);
 }
 
 void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
@@ -98,8 +105,12 @@ void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
           Serial.printf("[CMD] Info sent | %s\n", info);
         }
         if (strcmp(command, "info:long") == 0) {
-          sendLongInfo(packet->srcMac, packet->appId);
-          Serial.println("[CMD] Long info sent");
+          memcpy(longInfoDestMac, packet->srcMac, 6);
+          longInfoAppId = packet->appId;
+          longInfoPart = 0;
+          pendingLongInfo = true;
+          lastLongInfoTx = 0;
+          Serial.println("[CMD] Long info queued");
         }
         if (strcmp(command, "reboot") == 0) {
           Serial.println("[CMD] Reboot requested, restarting...");
@@ -154,6 +165,19 @@ void setup() {
 
 void loop() {
     mesh.update();
+
+  if (pendingLongInfo && millis() - lastLongInfoTx >= LONG_INFO_TX_INTERVAL) {
+    bool ok = sendLongInfoPart(longInfoPart, longInfoDestMac, longInfoAppId);
+    if (!ok) {
+      Serial.printf("[CMD] Failed to send info%u\n", longInfoPart + 1);
+    }
+    lastLongInfoTx = millis();
+    longInfoPart++;
+    if (longInfoPart >= 3) {
+      pendingLongInfo = false;
+      Serial.println("[CMD] Long info sent");
+    }
+  }
 
     if (foundCoordinator) {
         unsigned long now = millis();
