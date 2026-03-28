@@ -32,6 +32,34 @@ unsigned long lastAttempt   = 0;
 unsigned long lastHeartbeat = 0;
 unsigned long lastSensor    = 0;
 
+static void sendLongInfo(uint8_t* destMac, uint8_t appId) {
+    char info[65];
+
+    snprintf(info, sizeof(info), "info1:n=%s,mac=%02X:%02X:%02X:%02X:%02X:%02X",
+             NODE_NAME,
+             myMac[0], myMac[1], myMac[2], myMac[3], myMac[4], myMac[5]);
+    mesh.send(destMac, MESH_TYPE_DATA, appId, (const uint8_t*)info, strlen(info), 4);
+
+    snprintf(info, sizeof(info), "info2:up=%lus,heap=%u,rssi=%d,ch=%d",
+             millis() / 1000UL,
+             ESP.getFreeHeap(),
+             WiFi.RSSI(),
+             WiFi.channel());
+    mesh.send(destMac, MESH_TYPE_DATA, appId, (const uint8_t*)info, strlen(info), 4);
+
+#if defined(ESP32)
+    snprintf(info, sizeof(info), "info3:chip=%s,rev=%d,sdk=%.24s",
+             ESP.getChipModel(),
+             ESP.getChipRevision(),
+             ESP.getSdkVersion());
+#else
+    snprintf(info, sizeof(info), "info3:chip=ESP8266,id=%06X,sdk=%.20s",
+             ESP.getChipId(),
+             ESP.getSdkVersion());
+#endif
+    mesh.send(destMac, MESH_TYPE_DATA, appId, (const uint8_t*)info, strlen(info), 4);
+}
+
 // -------------------------------------------------------
 // Display pages (64x48 WEMOS OLED)
 // U8g2: Y coordinate is the text BASELINE
@@ -88,7 +116,7 @@ void showPage(uint8_t page) {
 // -------------------------------------------------------
 
 void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
-    if (packet->type == MESH_TYPE_PONG && packet->payload[0] == 0x01 && !foundCoordinator) {
+    if (packet->type == MESH_TYPE_PONG && packet->payloadLen > 0 && packet->payload[0] == 0x01 && !foundCoordinator) {
         memcpy(coordinatorMac, packet->srcMac, 6);
         foundCoordinator = true;
         lastHeartbeat = millis() - HEARTBEAT_INTERVAL;
@@ -124,6 +152,24 @@ void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
                               packet->srcMac[0], packet->srcMac[1], packet->srcMac[2],
                               packet->srcMac[3], packet->srcMac[4], packet->srcMac[5],
                               ack);
+
+                if (strcmp(command, "info") == 0) {
+                    char info[65];
+                    unsigned long up = millis() / 1000UL;
+                    snprintf(info, sizeof(info), "info:u=%lus,h=%u,r=%d,ch=%d,m=%02X%02X",
+                             up,
+                             ESP.getFreeHeap(),
+                             WiFi.RSSI(),
+                             WiFi.channel(),
+                             myMac[4], myMac[5]);
+                    mesh.send(packet->srcMac, MESH_TYPE_DATA, packet->appId, (const uint8_t*)info, strlen(info), 4);
+                    Serial.printf("[CMD] Info sent | %s\n", info);
+                }
+
+                if (strcmp(command, "info:long") == 0) {
+                    sendLongInfo(packet->srcMac, packet->appId);
+                    Serial.println("[CMD] Long info sent");
+                }
 
                 if (strcmp(command, "reboot") == 0) {
                     Serial.println("[CMD] Reboot requested, restarting...");
