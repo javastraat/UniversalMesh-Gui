@@ -200,8 +200,7 @@ R"rawliteral(
       </div>
       <div id="msg-status" style="margin-top:6px;font-size:0.85em;color:var(--sub);text-align:center"></div>
     </div>
-  </div>
-  <div class="card">
+  <div class="card" style="grid-column:1/-1">
     <h2>Live Packet Log <span id="log-pageinfo" style="float:right;font-size:0.8em;color:var(--sub)"></span></h2>
     <div id="log-empty" class="empty">No packets yet</div>
     <div style="overflow-x:auto">
@@ -218,7 +217,7 @@ R"rawliteral(
       <div class="sub" id="tick"></div>
     </div>
   </div>
-  <div id="topo-panel" style="display:none;margin-top:15px">
+  <div id="topo-panel" style="display:none;grid-column:1/-1">
     <div class="card">
       <h2>Mesh Topology</h2>
       <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
@@ -233,11 +232,12 @@ R"rawliteral(
       <div style="margin-top:4px;font-size:0.8em;color:var(--sub)">Inferred from relay paths in packet log &mdash; blue = coordinator &middot; green = node &middot; click to select &middot; drag to pin &middot; double-click to unpin</div>
     </div>
   </div>
-  <div id="console-panel" style="display:none;margin-top:15px">
+  <div id="console-panel" style="display:none;grid-column:1/-1">
     <div class="card">
       <h2>&gt;_ Serial Console</h2>
       <div id="console-out" class="console-out"></div>
     </div>
+  </div>
   </div>
   </div>
   <script>
