@@ -41,7 +41,7 @@ constexpr unsigned long MQTT_COORD_PUB_MS = 60000;
 
 // Publish queue — enqueued from ESP-NOW callback task, drained in loop()
 #define MQTT_QUEUE_SIZE 8
-struct MqttPub { char topic[96]; char payload[65]; };
+struct MqttPub { char topic[96]; char payload[201]; };
 static MqttPub _mqttQueue[MQTT_QUEUE_SIZE];
 static int     _mqttQHead = 0;
 static int     _mqttQTail = 0;
@@ -223,7 +223,7 @@ static void mqttEnqueue(MeshPacket* packet) {
   if (packet->appId == 0x05) {
     strcpy(msg.payload, "1");
   } else {
-    uint8_t len = packet->payloadLen < 64 ? packet->payloadLen : 64;
+    uint8_t len = packet->payloadLen < 200 ? packet->payloadLen : 200;
     memcpy(msg.payload, packet->payload, len);
     msg.payload[len] = '\0';
   }
@@ -316,7 +316,26 @@ void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
   unlockMeshData();
 
   // 2. Process the packet types
-  if (packet->type == MESH_TYPE_PONG) {
+  if (packet->type == MESH_TYPE_PING && packet->payloadLen > 0) {
+    // Node announced itself with its name in the PING payload (new library discovery)
+    char name[201] = {0};
+    uint8_t len = packet->payloadLen < 200 ? packet->payloadLen : 200;
+    memcpy(name, packet->payload, len);
+    lockMeshData();
+    for (int i = 0; i < MAX_NODES; i++) {
+      if (meshNodes[i].active && memcmp(meshNodes[i].mac, packet->srcMac, 6) == 0) {
+        strncpy(meshNodes[i].name, name, sizeof(meshNodes[i].name) - 1);
+        meshNodes[i].name[sizeof(meshNodes[i].name) - 1] = '\0';
+        break;
+      }
+    }
+    unlockMeshData();
+    char logMsg[80];
+    snprintf(logMsg, sizeof(logMsg), "[DISCOVERY] Node joined: %s", name);
+    Serial.println(logMsg);
+    addSerialLog(logMsg);
+  }
+  else if (packet->type == MESH_TYPE_PONG) {
     char logMsg[80];
     snprintf(logMsg, sizeof(logMsg), "[DISCOVERY] PONG from %02X:%02X:%02X:%02X:%02X:%02X",
              senderMac[0], senderMac[1], senderMac[2],
@@ -325,8 +344,8 @@ void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
     addSerialLog(logMsg);
   }
   else if (packet->type == MESH_TYPE_DATA) {
-    char payloadStr[65] = {0};
-    uint8_t len = packet->payloadLen < 64 ? packet->payloadLen : 64;
+    char payloadStr[201] = {0};
+    uint8_t len = packet->payloadLen < 200 ? packet->payloadLen : 200;
     memcpy(payloadStr, packet->payload, len);
 
     if (packet->appId == 0x06) {
@@ -469,7 +488,7 @@ void setup() {
 #endif  // LILYGO_T_ETH_ELITE
 
   // 2. Initialize Universal Mesh on the Router's Channel
-  if (mesh.begin(chan, true)) {
+  if (mesh.begin(chan, MESH_COORDINATOR)) {
     Serial.println("[SYSTEM] Universal Mesh Online.");
     mesh.onReceive(onMeshMessage);
     char meshMsg[64];
@@ -501,9 +520,9 @@ void setup() {
       uint8_t appId = doc["appId"] | 0x00;
       String payloadHex = doc["payload"] | "";
 
-      uint8_t payloadBytes[64] = {0};
+      uint8_t payloadBytes[200] = {0};
       uint8_t payloadLen = payloadHex.length() / 2;
-      if (payloadLen > 64) payloadLen = 64;
+      if (payloadLen > 200) payloadLen = 200;
 
       for (int i = 0; i < payloadLen; i++) {
         String byteString = payloadHex.substring(i * 2, i * 2 + 2);
