@@ -226,8 +226,9 @@ R"rawliteral(
         <button class="btn btn-secondary" onclick="topoToggleMac()" id="topo-mac-btn" title="Toggle MAC labels" style="opacity:0.55">MAC</button>
         <button class="btn btn-secondary" onclick="topoToggleAge()" id="topo-age-btn" title="Toggle edge age labels" style="opacity:0.55">Age</button>
         <button class="btn btn-secondary" onclick="topoToggleFlow()" id="topo-flow-btn" title="Toggle live data-flow particles">&#9670; Flow</button>
+        <button class="btn btn-secondary" onclick="topoFitAll()" title="Fit all nodes to view">&#x26F6; Fit</button>
         <button class="btn btn-secondary" onclick="topoExportPng()" title="Export as PNG">&#8681; PNG</button>
-        <button class="btn btn-secondary" onclick="topoFullscreen()" id="topo-fs-btn" title="Full screen">&#x26F6; Full</button>
+        <button class="btn btn-secondary" onclick="topoFullscreen()" id="topo-fs-btn" title="Full screen">Full</button>
       </div>
       <canvas id="topo-canvas" width="700" height="340" style="width:100%;display:block;border-radius:4px;background:var(--bg);cursor:grab"></canvas>
       <div id="topo-info" style="min-height:2.5em;margin-top:8px;padding:8px;border-radius:4px;background:var(--row-bg);font-size:0.88em;line-height:1.6"></div>
@@ -436,7 +437,7 @@ R"rawliteral(
 
     // --- Mesh topology force graph ---
     let _topoRunning=false,_topoAnim=null,_topoNodes=[],_topoEdges=[],_topoMap=new Map(),_topoSel=null,_stCache={};
-    let _topoPanX=0,_topoPanY=0,_topoDrag=null,_topoPanning=false,_topoPanLast={x:0,y:0},_topoFrozen=false,_topoDragMoved=false,_topoShowMac=false,_topoShowAge=false,_topoShowFlow=true;
+    let _topoPanX=0,_topoPanY=0,_topoScale=1,_topoDrag=null,_topoPanning=false,_topoPanLast={x:0,y:0},_topoFrozen=false,_topoDragMoved=false,_topoShowMac=false,_topoShowAge=false,_topoShowFlow=true;
     let _topoParticles=[],_topoSeenPkts=new Set();
     function toggleTopology(){
       const p=document.getElementById('topo-panel');
@@ -490,7 +491,7 @@ R"rawliteral(
       const r=cv.getBoundingClientRect();
       const sx=(e.clientX-r.left)*(cv.width/r.width);
       const sy=(e.clientY-r.top)*(cv.height/r.height);
-      return {x:sx-_topoPanX,y:sy-_topoPanY};
+      return {x:(sx-_topoPanX)/_topoScale,y:(sy-_topoPanY)/_topoScale};
     }
     function topoClampView(cv){
       if(!_topoNodes.length) return;
@@ -498,12 +499,10 @@ R"rawliteral(
       _topoNodes.forEach(n=>{x0=Math.min(x0,n.x);x1=Math.max(x1,n.x);y0=Math.min(y0,n.y);y1=Math.max(y1,n.y);});
       const pad=50,mg=60;
       x0-=pad;x1+=pad;y0-=pad;y1+=pad;
-      // minimum zoom = zoom that fits all nodes in canvas (can't zoom out further than that)
-      // clamp pan so nodes can't scroll off screen
-      _topoPanX=Math.min(_topoPanX,(cv.width-mg)-x0);
-      _topoPanX=Math.max(_topoPanX,mg-x1);
-      _topoPanY=Math.min(_topoPanY,(cv.height-mg)-y0);
-      _topoPanY=Math.max(_topoPanY,mg-y1);
+      _topoPanX=Math.min(_topoPanX,(cv.width-mg)-x0*_topoScale);
+      _topoPanX=Math.max(_topoPanX,mg-x1*_topoScale);
+      _topoPanY=Math.min(_topoPanY,(cv.height-mg)-y0*_topoScale);
+      _topoPanY=Math.max(_topoPanY,mg-y1*_topoScale);
     }
     function topoHitNode(cx,cy){
       let hit=null;
@@ -543,11 +542,13 @@ R"rawliteral(
       if(document.fullscreenElement){
         cv.width=window.screen.width;cv.height=Math.max(300,window.screen.height-110);
         btn.textContent='\u2715 Exit Full';
+        fixCoord(); topoFitAll();
       } else {
         cv.width=700;cv.height=340;
+        _topoScale=1;
         btn.textContent='\u26F6 Full';
+        fixCoord();
       }
-      fixCoord();
     });
     function spawnFlowParticle(fromId,toId,color,delayMs){
       if(!_topoShowFlow||!_topoRunning) return;
@@ -572,10 +573,20 @@ R"rawliteral(
       },'image/png');
     }
     function topoReset(){
-      _topoPanX=0;_topoPanY=0;
+      _topoPanX=0;_topoPanY=0;_topoScale=1;
       _topoNodes.forEach(n=>{if(!n.isCoord){n.fixed=false;n.vx=0;n.vy=0;}});
       fixCoord();
       if(_topoFrozen){_topoFrozen=false;const btn=document.getElementById('topo-freeze-btn');btn.innerHTML='&#9646;&#9646; Freeze';btn.style.opacity='1';}
+    }
+    function topoFitAll(){
+      if(!_topoNodes.length) return;
+      const cv=document.getElementById('topo-canvas');
+      let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+      _topoNodes.forEach(n=>{x0=Math.min(x0,n.x);x1=Math.max(x1,n.x);y0=Math.min(y0,n.y);y1=Math.max(y1,n.y);});
+      const pad=60,ww=(x1-x0)||1,wh=(y1-y0)||1;
+      _topoScale=Math.min((cv.width-pad*2)/ww,(cv.height-pad*2)/wh,4);
+      _topoPanX=(cv.width-ww*_topoScale)/2-x0*_topoScale;
+      _topoPanY=(cv.height-wh*_topoScale)/2-y0*_topoScale;
     }
 function fixCoord(){
       const cv=document.getElementById('topo-canvas');
@@ -658,6 +669,7 @@ function fixCoord(){
       ctx.clearRect(0,0,cv.width,cv.height);
       ctx.save();
       ctx.translate(_topoPanX,_topoPanY);
+      ctx.scale(_topoScale,_topoScale);
       ctx.strokeStyle=dark?'#3a3a5c':'#bbb'; ctx.lineWidth=1.5;
       es.forEach(([ai,bi])=>{
         const a=nm.get(ai),b=nm.get(bi); if(!a||!b) return;
