@@ -7,6 +7,7 @@
   #include <Adafruit_NeoPixel.h>
 #endif
 #include "UniversalMesh.h"
+#include "ota_update.h"
 
 #ifndef NODE_NAME
   #define NODE_NAME "sensor-node"
@@ -159,7 +160,7 @@ void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
   }
 
   const char* command = msg + 4;
-  char ack[64];
+  char ack[220];
   snprintf(ack, sizeof(ack), "command received:%s", command);
   mesh.send(packet->srcMac, MESH_TYPE_DATA, packet->appId, (const uint8_t*)ack, strlen(ack), 4);
 
@@ -170,9 +171,7 @@ void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
     delay(100);
     ESP.restart();
   } else if (strcmp(command, "update") == 0) {
-    Serial.println("[CMD] Update requested, rebooting...");
-    delay(100);
-    ESP.restart();
+    startOtaUpdate();
   }
 }
 
