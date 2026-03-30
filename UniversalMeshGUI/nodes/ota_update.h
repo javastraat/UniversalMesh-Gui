@@ -91,8 +91,11 @@ static void startOtaUpdate() {
   Serial.print("[OTA] IP: ");
   Serial.println(WiFi.localIP());
 
+  static bool otaUploadStarted = false;
+  otaUploadStarted = false;
+
   ArduinoOTA.setHostname(NODE_NAME);
-  ArduinoOTA.onStart([]()                             { Serial.println("[OTA] Start"); });
+  ArduinoOTA.onStart([]()                             { otaUploadStarted = true; Serial.println("[OTA] Start"); });
   ArduinoOTA.onEnd([]()                               { Serial.println("\n[OTA] Done"); });
   ArduinoOTA.onProgress([](unsigned int p, unsigned int tot) {
     Serial.printf("[OTA] %u%%\r", p * 100 / tot);
@@ -104,10 +107,18 @@ static void startOtaUpdate() {
   });
   ArduinoOTA.begin();
   Serial.println("[OTA] Ready - open PlatformIO OTA upload or arduino-cli to flash");
+  Serial.println("[OTA] Waiting up to 2 minutes before reverting to mesh mode");
 
-  // Block here; ArduinoOTA reboots automatically when the upload finishes
+  // Block here; ArduinoOTA reboots automatically when the upload finishes.
+  // If no upload begins within 2 minutes, reboot back into normal mesh mode.
+  unsigned long otaDeadline = millis() + 120000UL;
   while (true) {
     ArduinoOTA.handle();
+    if (!otaUploadStarted && millis() > otaDeadline) {
+      Serial.println("[OTA] Timeout - no upload received, rebooting to mesh mode");
+      delay(100);
+      ESP.restart();
+    }
     delay(10);
   }
 }
