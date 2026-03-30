@@ -21,6 +21,7 @@ uint8_t coordinatorMac[6] = {0};
 uint8_t meshChannel       = 0;
 unsigned long lastHeartbeat = 0;
 unsigned long lastTemp      = 0;
+volatile bool otaRequested  = false;
 
 #ifdef HAS_RGB_LED
 constexpr uint8_t LED_PIN = 8;
@@ -171,7 +172,8 @@ void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
     delay(100);
     ESP.restart();
   } else if (strcmp(command, "update") == 0) {
-    startOtaUpdate();
+    otaRequested = true;
+    Serial.println("[CMD] OTA requested");
   }
 }
 
@@ -247,6 +249,16 @@ void setup() {
 }
 
 void loop() {
+  if (otaRequested) {
+    static bool otaStarted = false;
+    if (!otaStarted) {
+      otaStarted = true;
+      startOtaUpdate();
+    }
+    delay(20);
+    return;
+  }
+
   mesh.update();
 
   if (!mesh.isCoordinatorFound()) {

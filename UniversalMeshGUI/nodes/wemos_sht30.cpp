@@ -30,6 +30,7 @@ uint8_t coordinatorMac[6] = {0};
 uint8_t meshChannel       = 0;
 unsigned long lastHeartbeat = 0;
 unsigned long lastSensor    = 0;
+volatile bool otaRequested  = false;
 
 static void sendInfo(uint8_t* destMac, uint8_t appId) {
   char macStr[18];
@@ -130,7 +131,8 @@ void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
     delay(100);
     ESP.restart();
   } else if (strcmp(command, "update") == 0) {
-    startOtaUpdate();
+    otaRequested = true;
+    Serial.println("[CMD] OTA requested");
   }
 }
 
@@ -198,6 +200,16 @@ void setup() {
 }
 
 void loop() {
+  if (otaRequested) {
+    static bool otaStarted = false;
+    if (!otaStarted) {
+      otaStarted = true;
+      startOtaUpdate();
+    }
+    delay(20);
+    return;
+  }
+
   mesh.update();
 
   if (!mesh.isCoordinatorFound()) {
