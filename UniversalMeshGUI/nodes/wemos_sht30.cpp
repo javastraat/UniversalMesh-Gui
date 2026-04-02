@@ -19,8 +19,8 @@ float         lastHum        = NAN;
 #ifndef NODE_NAME
   #define NODE_NAME "sensor-node"
 #endif
-#define HEARTBEAT_INTERVAL  60000
-#define SENSOR_INTERVAL     30000
+#define HEARTBEAT_INTERVAL  120000
+#define SENSOR_INTERVAL      60000
 
 UniversalMesh  mesh;
 Adafruit_SHT31 sht30;

@@ -12,8 +12,8 @@
 #ifndef NODE_NAME
   #define NODE_NAME "sensor-node"
 #endif
-#define HEARTBEAT_INTERVAL  60000
-#define TEMP_INTERVAL       30000
+#define HEARTBEAT_INTERVAL  120000
+#define TEMP_INTERVAL        60000
 
 UniversalMesh mesh;
 uint8_t myMac[6]          = {0};
