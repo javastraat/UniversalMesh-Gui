@@ -14,8 +14,8 @@
 #ifndef NODE_NAME
   #define NODE_NAME "um-pager"
 #endif
-#define UM_HB_INTERVAL   60000UL
-#define UM_TEMP_INTERVAL 120000UL
+#define UM_HB_INTERVAL   120000UL
+#define UM_TEMP_INTERVAL 180000UL
 #define UM_LOG_ROWS      20
 #define UM_FULL_LEN      320
 
