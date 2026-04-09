@@ -619,6 +619,18 @@ void setup()
 
     instance.begin();
     beginLvglHelper(instance);
+
+    // Workaround: LV_Helper_v9 creates the default group AFTER
+    // registering indevs, so the encoder/keyboard are assigned to NULL.
+    // Re-assign all input devices to the actual default group.
+    lv_group_t *g = lv_group_get_default();
+    if (g) {
+        lv_indev_t *indev = NULL;
+        while ((indev = lv_indev_get_next(indev)) != NULL) {
+            lv_indev_set_group(indev, g);
+        }
+    }
+
     instance.setBrightness(DEVICE_MAX_BRIGHTNESS_LEVEL);
 
     um_show_boot_screen();
