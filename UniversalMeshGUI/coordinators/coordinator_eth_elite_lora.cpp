@@ -22,6 +22,7 @@ extern void setupETH();
 extern void loopETH();
 extern bool   isEthConnected();
 extern bool   isEthLinkUp();
+extern bool   isOtaUpdating();
 extern String getEthSubnet();
 extern String getEthDNS();
 extern bool   isNtpSynced();
@@ -586,6 +587,11 @@ void setup() {
 
 void loop() {
   loopETH();
+  if (isOtaUpdating()) {
+    // Keep OTA responsiveness high while flash write is in progress.
+    delay(1);
+    return;
+  }
 #ifdef HAS_LORA
   loopLoRa();
 #endif

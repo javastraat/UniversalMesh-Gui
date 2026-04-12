@@ -36,6 +36,7 @@
 static bool ethConnected = false;
 static bool ethLinkUp    = false;
 static bool otaStarted   = false;
+static volatile bool otaUpdating = false;
 static bool mdnsStarted  = false;
 static bool ntpStarted   = false;
 
@@ -64,15 +65,18 @@ static void startOTA() {
     ArduinoOTA.setHostname(MESH_HOSTNAME);
     ArduinoOTA.setPassword(OTA_PASSWORD);
     ArduinoOTA.onStart([]() {
+        otaUpdating = true;
         Serial.println("[OTA] Starting update...");
     });
     ArduinoOTA.onEnd([]() {
+        otaUpdating = false;
         Serial.println("\n[OTA] Done — rebooting.");
     });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
         Serial.printf("[OTA] %u%%\r", progress * 100 / total);
     });
     ArduinoOTA.onError([](ota_error_t error) {
+        otaUpdating = false;
         Serial.printf("[OTA] Error[%u]: ", error);
         if      (error == OTA_AUTH_ERROR)    Serial.println("Auth failed");
         else if (error == OTA_BEGIN_ERROR)   Serial.println("Begin failed");
@@ -96,6 +100,7 @@ static void startMDNS() {
 
 bool   isEthConnected()  { return ethConnected; }
 bool   isEthLinkUp()     { return ethLinkUp; }
+bool   isOtaUpdating()   { return otaUpdating; }
 String getEthLocalIP()    { return ETH.localIP().toString(); }
 String getEthMAC()        { return ETH.macAddress(); }
 String getEthGateway()    { return ETH.gatewayIP().toString(); }
@@ -170,5 +175,6 @@ void loopETH() {
 
 void setupETH() {}
 void loopETH() {}
+bool isOtaUpdating() { return false; }
 
 #endif  // LILYGO_T_ETH_ELITE
