@@ -57,6 +57,8 @@ unsigned long lastTemp        = 0;
 unsigned long lastDisplayTick = 0;
 volatile bool otaRequested  = false;
 static float  lastTempC     = 0.0f;
+static unsigned long popupShownAt = 0;
+static bool          popupVisible = false;
 
 // --- Display layout (landscape 320 x 170) ----------------------
 //
@@ -72,14 +74,80 @@ static float  lastTempC     = 0.0f;
 // displayTick() : updates only heap, uptime, temperature — no flicker
 // displayUpdate(): full redraw — called on connect / coord-change
 
+void displayUpdate(); // forward declaration
+
 static void cardBg(int16_t x, int16_t y, int16_t w, int16_t h) {
   tft.fillRoundRect(x, y, w, h, 4, COL_CARD);
   tft.drawRoundRect(x, y, w, h, 4, COL_BORDER);  // visible in light, invisible in dark
 }
 
+// Full-screen popup — shown for 5 s on any incoming direct message.
+// Layout (320 x 170 landscape):
+//   ┌── accent title bar ─────────────────────────────┐  y=0..24
+//   │  From  AA:BB:CC:DD:EE:FF                        │
+//   ├─────────────────────────────────────────────────┤
+//   │  message text  (size 2, ~26 chars/line)         │
+//   │  wraps up to 5 lines                            │
+//   │                                                 │
+//   │                          closes in 5s  (muted)  │  y=158
+//   └─────────────────────────────────────────────────┘
+static void showPopup(const uint8_t* srcMac, const char* msg) {
+  if (!displayOn) return;
+  popupShownAt = millis();
+  popupVisible  = true;
+
+  // ── Background ──────────────────────────────────────
+  tft.fillScreen(COL_CARD);
+
+  // ── Accent title bar ────────────────────────────────
+  tft.fillRect(0, 0, 320, 24, COL_ACCENT);
+  tft.setTextSize(1);
+  tft.setTextColor(COL_CARD, COL_ACCENT);
+  tft.setCursor(6, 8);
+  tft.print("From ");
+  char macStr[18];
+  snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+           srcMac[0], srcMac[1], srcMac[2], srcMac[3], srcMac[4], srcMac[5]);
+  tft.print(macStr);
+
+  // ── Message body (textSize 2 → ~12 px/char, 26 chars/line) ──
+  tft.setTextSize(2);
+  tft.setTextColor(COL_TEXT, COL_CARD);
+
+  const uint8_t CHARS_PER_LINE = 26;
+  const uint8_t MAX_LINES      = 5;
+  uint16_t      msgLen         = strlen(msg);
+  uint16_t      offset         = 0;
+  uint8_t       lineY          = 32;
+
+  for (uint8_t l = 0; l < MAX_LINES && offset < msgLen; l++, lineY += 22) {
+    char line[CHARS_PER_LINE + 1];
+    uint8_t take = (msgLen - offset > CHARS_PER_LINE) ? CHARS_PER_LINE : (msgLen - offset);
+    strncpy(line, msg + offset, take);
+    line[take] = '\0';
+    offset += take;
+    tft.setCursor(6, lineY);
+    tft.print(line);
+  }
+
+  // ── Dismiss hint ────────────────────────────────────
+  tft.setTextSize(1);
+  tft.setTextColor(COL_MUTED, COL_CARD);
+  tft.setCursor(220, 158);
+  tft.print("closes in 5s");
+}
+
 // Updates only the three live fields — no full-screen clear, no flicker.
 void displayTick() {
   if (!displayOn) return;
+
+  // Auto-dismiss popup after 5 s
+  if (popupVisible && millis() - popupShownAt >= 5000) {
+    popupVisible = false;
+    displayUpdate();   // full redraw restores cards underneath
+    return;
+  }
+  if (popupVisible) return;  // don't overwrite popup while it's showing
   lastTempC = temperatureRead();   // always read fresh for display
   tft.setTextSize(1);
 
@@ -251,6 +319,8 @@ void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
           packet->srcMac[0], packet->srcMac[1], packet->srcMac[2],
           packet->srcMac[3], packet->srcMac[4], packet->srcMac[5],
           packet->appId, msg);
+
+  showPopup(packet->srcMac, msg);
 
   if (len < 4 || strncmp(msg, "cmd:", 4) != 0) return;
 
