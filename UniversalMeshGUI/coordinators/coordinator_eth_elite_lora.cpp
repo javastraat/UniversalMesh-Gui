@@ -277,6 +277,13 @@ void onMeshMessage(MeshPacket* packet, uint8_t* senderMac) {
 
   // 2. Process the packet types
   if (packet->type == MESH_TYPE_PING) {
+    char pingMsg[96];
+    snprintf(pingMsg, sizeof(pingMsg), "[PING] src=%02X:%02X:%02X:%02X:%02X:%02X appId=0x%02X len=%u",
+             senderMac[0], senderMac[1], senderMac[2], senderMac[3], senderMac[4], senderMac[5],
+             packet->appId, packet->payloadLen);
+    Serial.println(pingMsg);
+    addSerialLog(pingMsg);
+
     // Store the node name if the PING carries one (new library discovery payload)
     if (packet->payloadLen > 0) {
       char name[201] = {0};
