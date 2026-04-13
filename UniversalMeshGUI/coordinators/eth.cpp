@@ -65,7 +65,8 @@ String getNtpTimeStr() {
 static void startOTA() {
     if (otaStarted) return;
     ArduinoOTA.setHostname(MESH_HOSTNAME);
-    ArduinoOTA.setPassword(OTA_PASSWORD);
+    // No OTA password — device is on a trusted local mesh network.
+    // Password-based auth causes espota.py version skew (SHA256 vs MD5 mismatch).
     ArduinoOTA.onStart([]() {
         otaActive = true;
         Serial.println("[OTA] Starting update — pausing mesh/MQTT/LoRa...");

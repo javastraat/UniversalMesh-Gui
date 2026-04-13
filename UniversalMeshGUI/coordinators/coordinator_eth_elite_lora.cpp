@@ -401,6 +401,7 @@ void setup() {
 
   // --- MQTT ---
   _mqtt.setServer(MQTT_BROKER, MQTT_PORT);
+  _mqtt.setSocketTimeout(2);  // 2s max per MQTT op — prevents blocking OTA/mesh
   mqttConnect();
 
   // 2. Initialize Universal Mesh on the Router's Channel

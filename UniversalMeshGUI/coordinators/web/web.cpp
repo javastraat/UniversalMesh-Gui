@@ -152,8 +152,8 @@ R"rawliteral(
       </div>
       <div id="nodes-empty" class="empty">No nodes discovered yet</div>
       <table id="nodes-table" style="display:none;table-layout:fixed;width:100%">
-        <colgroup><col style="width:auto"><col style="width:90px"><col style="width:90px"></colgroup>
-        <thead><tr><th onclick="sortNodes('name')" style="cursor:pointer;user-select:none">Node <span id="sort-node-icon"></span></th><th onclick="sortNodes('seen')" style="cursor:pointer;user-select:none;text-align:right;white-space:nowrap">Last Seen <span id="sort-seen-icon">&#9650;</span></th></tr></thead>
+        <colgroup><col style="width:auto"><col style="width:58px"></colgroup>
+        <thead><tr><th onclick="sortNodes('name')" style="cursor:pointer;user-select:none">Node <span id="sort-node-icon"></span></th><th onclick="sortNodes('seen')" style="cursor:pointer;user-select:none;text-align:right;white-space:nowrap">Seen <span id="sort-seen-icon">&#9650;</span></th></tr></thead>
         <tbody id="nodes-body"></tbody>
       </table>
     </div>
