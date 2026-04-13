@@ -129,7 +129,12 @@ void loraOnReceive(MeshReceiveCallback cb) {
 // ---------------------------------------------------------------------------
 // ISRs — IRAM_ATTR so they survive cache misses; flag-only, NO SPI here
 // ---------------------------------------------------------------------------
-static void IRAM_ATTR _isrRx() { _rxReady = true; }
+static void IRAM_ATTR _isrRx() {
+  _rxReady = true;
+#ifdef DEBUG
+  // Note: Serial is not safe in ISR, but for debug, you can try toggling a pin or setting a flag.
+#endif
+}
 static void IRAM_ATTR _isrTx() { _txDone  = true; }
 
 // RF switch table — LR1121 uses DIO5/DIO6 internally to switch antenna paths.
@@ -246,8 +251,11 @@ bool loraSendPacket(MeshPacket* pkt, float freqMHz = 0.0f) {
 // ---------------------------------------------------------------------------
 void loopLoRa() {
 
+
+
   // --- 1. RX: ISR set _rxReady, read the packet in safe context ---
   if (_rxReady) {
+    Serial.println("[LORA][DEBUG] _rxReady set, processing RX");
     _rxReady = false;
 
     int next = (_rxHead + 1) % LORA_RX_QUEUE_SIZE;
@@ -258,10 +266,13 @@ void loopLoRa() {
 
       int state = _radio.readData(e.data, pktLen);
       if (state == RADIOLIB_ERR_NONE) {
+        Serial.printf("[LORA][DEBUG] Packet received: len=%d\n", pktLen);
         e.len  = pktLen;
         e.rssi = _radio.getRSSI();
         e.snr  = _radio.getSNR();
         _rxHead = next;
+      } else {
+        Serial.printf("[LORA][DEBUG] readData error: %d\n", state);
       }
       // Silently discard CRC errors — LoRa CRC handles this
     } else {

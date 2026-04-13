@@ -203,7 +203,7 @@ R"rawliteral(
     <div class="card" id="lora-card" style="display:none">
       <h2>Send via LoRa</h2>
       <div class="row" style="margin-bottom:8px">
-        <span class="lbl">Freq</span>
+        <span class="lbl">TX Freq</span>
         <select id="lora-freq" class="sel" style="flex:1;min-width:0">
           <option value="868.0">868.0 MHz (EU)</option>
           <option value="868.3">868.3 MHz (EU)</option>
