@@ -38,6 +38,9 @@ static bool ethLinkUp    = false;
 static bool otaStarted   = false;
 static bool mdnsStarted  = false;
 static bool ntpStarted   = false;
+static bool otaActive    = false;
+
+bool isOtaInProgress() { return otaActive; }
 
 static void startNTP() {
     if (ntpStarted) return;
@@ -64,7 +67,8 @@ static void startOTA() {
     ArduinoOTA.setHostname(MESH_HOSTNAME);
     ArduinoOTA.setPassword(OTA_PASSWORD);
     ArduinoOTA.onStart([]() {
-        Serial.println("[OTA] Starting update...");
+        otaActive = true;
+        Serial.println("[OTA] Starting update — pausing mesh/MQTT/LoRa...");
     });
     ArduinoOTA.onEnd([]() {
         Serial.println("\n[OTA] Done — rebooting.");

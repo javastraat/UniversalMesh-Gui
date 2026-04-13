@@ -153,7 +153,7 @@ R"rawliteral(
       <div id="nodes-empty" class="empty">No nodes discovered yet</div>
       <table id="nodes-table" style="display:none;table-layout:fixed;width:100%">
         <colgroup><col style="width:auto"><col style="width:90px"><col style="width:90px"></colgroup>
-        <thead><tr><th onclick="sortNodes('name')" style="cursor:pointer;user-select:none">Node <span id="sort-node-icon"></span></th><th>Radio</th><th onclick="sortNodes('seen')" style="cursor:pointer;user-select:none;text-align:right">Last Seen <span id="sort-seen-icon">&#9650;</span></th></tr></thead>
+        <thead><tr><th onclick="sortNodes('name')" style="cursor:pointer;user-select:none">Node <span id="sort-node-icon"></span></th><th onclick="sortNodes('seen')" style="cursor:pointer;user-select:none;text-align:right;white-space:nowrap">Last Seen <span id="sort-seen-icon">&#9650;</span></th></tr></thead>
         <tbody id="nodes-body"></tbody>
       </table>
     </div>
@@ -419,7 +419,7 @@ R"rawliteral(
       document.getElementById('nodes-empty').style.display='none';
       document.getElementById('nodes-table').style.display='';
       const blueDot='<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#58a6ff;margin-right:6px"></span>';
-      nb.innerHTML='<tr><td colspan="3">'+blueDot+'<span style="color:#58a6ff;font-weight:bold">coordinator</span><br><span style="font-size:0.85em;color:var(--muted)">'+coordMac_+'</span></td></tr>';
+      nb.innerHTML='<tr><td colspan="2">'+blueDot+'<span style="color:#58a6ff;font-weight:bold">coordinator</span><br><span style="font-size:0.85em;color:var(--muted)">'+coordMac_+'</span></td></tr>';
       const others=nodes.filter(n=>n.mac.toUpperCase()!==coordMac_).sort((a,b)=>{
         if(nodeSort_.col==='name'){
           const na=(a.name||a.mac).toLowerCase(), nb2=(b.name||b.mac).toLowerCase();
@@ -429,17 +429,21 @@ R"rawliteral(
         }
       });
       others.forEach(n=>{
-        const dot='<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+(n.last_seen_seconds_ago<=120?'#3fb950':'#f85149')+';margin-right:6px"></span>';
-        const node=n.name?'<span style="color:#58a6ff;font-weight:bold">'+n.name+'</span><br><span style="font-size:0.85em;color:var(--muted)">'+n.mac+'</span>':n.mac;
-        let radioBadge='';
+        const dot='<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+(n.last_seen_seconds_ago<=120?'#3fb950':'#f85149')+';margin-right:6px;flex-shrink:0"></span>';
+        const nameHtml=n.name?'<span style="color:#58a6ff;font-weight:bold">'+n.name+'</span>':n.mac;
+        const macHtml=n.name?'<div style="font-size:0.82em;color:var(--muted);margin-top:1px">'+n.mac+'</div>':'';
+        let badgeHtml='';
         if(n.transport==='lora_868'||n.transport==='lora_2400'){
-          const freq=n.transport==='lora_868'?'868':'2.4G';
-          const rssi=n.rssi_dbm!==undefined?('<br><span style="font-size:0.8em;color:var(--muted)">'+n.rssi_dbm+'dBm '+n.snr_db+'dB</span>'):'';
-          radioBadge='<span style="background:#1f4a6e;color:#58a6ff;border-radius:4px;padding:1px 6px;font-size:0.8em;white-space:nowrap">LoRa '+freq+'</span>'+rssi;
+          const freq=n.transport==='lora_868'?'868 MHz':'2.4G';
+          const signal=n.rssi_dbm!==undefined?' &middot; '+n.rssi_dbm+'dBm '+n.snr_db+'dB':'';
+          badgeHtml='<div style="margin-top:3px"><span style="background:#1f4a6e;color:#58a6ff;border-radius:4px;padding:1px 6px;font-size:0.78em;white-space:nowrap">LoRa '+freq+signal+'</span></div>';
         } else {
-          radioBadge='<span style="background:#1a3a2a;color:#3fb950;border-radius:4px;padding:1px 6px;font-size:0.8em;white-space:nowrap">ESP-NOW</span>';
+          badgeHtml='<div style="margin-top:3px"><span style="background:#1a3a2a;color:#3fb950;border-radius:4px;padding:1px 6px;font-size:0.78em;white-space:nowrap">ESP-NOW</span></div>';
         }
-        nb.innerHTML+='<tr><td>'+dot+node+'</td><td style="vertical-align:top;padding-top:4px">'+radioBadge+'</td><td style="text-align:right;white-space:nowrap;vertical-align:top;padding-top:4px">'+n.last_seen_seconds_ago+'s ago</td></tr>';
+        nb.innerHTML+='<tr>'
+          +'<td><div style="display:flex;align-items:flex-start">'+dot+'<div>'+nameHtml+macHtml+badgeHtml+'</div></div></td>'
+          +'<td style="text-align:right;white-space:nowrap;vertical-align:top;padding-top:2px;font-size:0.9em">'+n.last_seen_seconds_ago+'s ago</td>'
+          +'</tr>';
       });
     }
     function filteredLog(){

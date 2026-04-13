@@ -22,6 +22,7 @@ extern void setupETH();
 extern void loopETH();
 extern bool   isEthConnected();
 extern bool   isEthLinkUp();
+extern bool   isOtaInProgress();
 extern String getEthSubnet();
 extern String getEthDNS();
 extern bool   isNtpSynced();
@@ -560,7 +561,11 @@ void setup() {
 }
 
 void loop() {
-  loopETH();
+  loopETH();  // always — this is where ArduinoOTA.handle() lives
+
+  // During OTA: yield entirely to the OTA handler — no SPI/MQTT/mesh competition
+  if (isOtaInProgress()) return;
+
 #ifdef HAS_LORA
   loopLoRa();
 #endif
