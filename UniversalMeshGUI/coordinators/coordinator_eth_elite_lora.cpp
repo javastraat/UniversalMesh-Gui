@@ -47,6 +47,55 @@ constexpr unsigned long MQTT_RECONNECT_MS = 5000;
 static unsigned long _mqttLastCoordPub = 0;
 constexpr unsigned long MQTT_COORD_PUB_MS = 60000;
 
+#ifdef HAS_LORA
+// MQTT topic HA publishes to in order to trigger a LoRa TX:
+//   mesh/universalmesh/lora/tx
+// Payload: plain text  OR  JSON {"payload":"...","dest":"FF:FF:FF:FF:FF:FF","appId":1}
+#define MQTT_LORA_TX_TOPIC MESH_NETWORK "/" MESH_HOSTNAME "/lora/tx"
+static void mqttLoRaTxCallback(const char* topic, byte* payload, unsigned int length) {
+  if (length == 0 || length > 190) return;
+
+  char buf[191];
+  memcpy(buf, payload, length);
+  buf[length] = '\0';
+
+  MeshPacket pkt = {};
+  pkt.type   = MESH_TYPE_DATA;
+  pkt.ttl    = 3;
+  pkt.msgId  = (uint32_t)(millis() ^ (esp_random() & 0xFFFF));
+  memset(pkt.destMac, 0xFF, 6);            // broadcast by default
+  esp_wifi_get_mac(WIFI_IF_STA, pkt.srcMac);
+  pkt.appId  = 0x01;
+
+  // Try JSON first: {"payload":"...","dest":"AA:BB:CC:DD:EE:FF","appId":1}
+  JsonDocument doc;
+  if (deserializeJson(doc, buf) == DeserializationError::Ok && doc["payload"].is<const char*>()) {
+    const char* text = doc["payload"] | "";
+    pkt.payloadLen = (uint8_t)strnlen(text, 190);
+    memcpy(pkt.payload, text, pkt.payloadLen);
+    pkt.appId = doc["appId"] | 0x01;
+    const char* destStr = doc["dest"] | "";
+    if (strlen(destStr) == 17) {
+      int t[6];
+      if (sscanf(destStr, "%x:%x:%x:%x:%x:%x", &t[0],&t[1],&t[2],&t[3],&t[4],&t[5]) == 6)
+        for (int i = 0; i < 6; i++) pkt.destMac[i] = (uint8_t)t[i];
+    }
+  } else {
+    // Plain text payload
+    pkt.payloadLen = (uint8_t)length;
+    memcpy(pkt.payload, buf, pkt.payloadLen);
+  }
+
+  bool ok = loraSendPacket(&pkt);
+  Serial.printf("[MQTT→LoRa] %s — payload='%.*s' queued=%s\n",
+                topic, pkt.payloadLen, (char*)pkt.payload, ok ? "yes" : "queue_full");
+  char logMsg[80];
+  snprintf(logMsg, sizeof(logMsg), "[MQTT→LoRa] '%.*s' %s",
+           pkt.payloadLen, (char*)pkt.payload, ok ? "queued" : "queue_full");
+  addSerialLog(logMsg);
+}
+#endif
+
 // Publish queue — enqueued from ESP-NOW callback task, drained in loop()
 #define MQTT_QUEUE_SIZE 8
 struct MqttPub { char topic[96]; char payload[201]; };
@@ -262,6 +311,10 @@ static void mqttConnect() {
     Serial.println(" OK");
     _mqtt.publish(availabilityTopic, "online", true);
     mqttPublishCoordinatorData(true);
+#ifdef HAS_LORA
+    _mqtt.subscribe(MQTT_LORA_TX_TOPIC);
+    Serial.printf("[MQTT] Subscribed to %s\n", MQTT_LORA_TX_TOPIC);
+#endif
   } else {
     Serial.printf(" failed rc=%d\n", _mqtt.state());
   }
@@ -395,6 +448,9 @@ void setup() {
   // --- MQTT ---
   _mqtt.setServer(MQTT_BROKER, MQTT_PORT);
   _mqtt.setSocketTimeout(2);  // 2s max per MQTT op — prevents blocking OTA/mesh
+#ifdef HAS_LORA
+  _mqtt.setCallback(mqttLoRaTxCallback);
+#endif
   mqttConnect();
 
   // 2. Initialize Universal Mesh on the Router's Channel
