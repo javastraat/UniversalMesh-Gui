@@ -223,6 +223,15 @@ bool loraSend(const uint8_t* data, uint8_t len, float freqMHz = 0.0f) {
   return true;
 }
 
+// loraStandby() — put radio in standby (stops RX, disables ISR triggers).
+// Call before OTA to prevent SPI conflicts and interrupt storms during flash write.
+void loraStandby() {
+  _radio.standby();
+  _rxReady = false;
+  _txDone  = false;
+  Serial.println("[LORA] Radio in standby for OTA.");
+}
+
 // loraSendPacket() — convenience wrapper: only sends header + actual payload,
 // not the unused tail of the 200-byte payload buffer.  Saves airtime.
 // Pass freqMHz > 0 to transmit on a different frequency (e.g. 915.0 for US band).
@@ -343,6 +352,7 @@ void loopLoRa() {
 
 void setupLoRa()                                      {}
 void loopLoRa()                                       {}
+void loraStandby()                                    {}
 bool loraSend(const uint8_t*, uint8_t, float)         { return false; }
 bool loraSendPacket(MeshPacket*, float)               { return false; }
 void loraOnReceive(MeshReceiveCallback)               {}

@@ -40,6 +40,8 @@ static bool mdnsStarted  = false;
 static bool ntpStarted   = false;
 static bool otaActive    = false;
 
+static void (*_otaBeginCb)() = nullptr;
+void setOtaBeginCallback(void(*cb)()) { _otaBeginCb = cb; }
 bool isOtaInProgress() { return otaActive; }
 
 static void startNTP() {
@@ -69,6 +71,7 @@ static void startOTA() {
     // Password-based auth causes espota.py version skew (SHA256 vs MD5 mismatch).
     ArduinoOTA.onStart([]() {
         otaActive = true;
+        if (_otaBeginCb) _otaBeginCb();   // e.g. put LoRa radio in standby
         Serial.println("[OTA] Starting update — pausing mesh/MQTT/LoRa...");
     });
     ArduinoOTA.onEnd([]() {

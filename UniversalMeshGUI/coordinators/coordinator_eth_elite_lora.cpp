@@ -23,6 +23,7 @@ extern void loopETH();
 extern bool   isEthConnected();
 extern bool   isEthLinkUp();
 extern bool   isOtaInProgress();
+extern void   setOtaBeginCallback(void(*cb)());
 extern String getEthSubnet();
 extern String getEthDNS();
 extern bool   isNtpSynced();
@@ -32,6 +33,7 @@ extern String getNtpTimeStr();
 #ifdef HAS_LORA
 extern void setupLoRa();
 extern void loopLoRa();
+extern void loraStandby();
 extern bool loraSendPacket(MeshPacket* pkt, float freqMHz = 0.0f);
 extern void loraOnReceive(MeshReceiveCallback cb);
 #endif
@@ -421,6 +423,8 @@ void setup() {
   loraOnReceive(onMeshMessage);
   setupLoRa();
   addSerialLog("[LORA] LR1121 bridge active (868 MHz SF12)");
+  // Put LoRa radio in standby when OTA starts — stops ISR storms during flash write
+  setOtaBeginCallback(loraStandby);
 #endif
 
   // 3. Setup REST API Endpoint for Injecting Packets
