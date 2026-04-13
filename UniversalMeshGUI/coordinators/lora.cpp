@@ -236,26 +236,21 @@ void loopLoRa() {
   // --- 1. RX: ISR set _rxReady, read the packet in safe context ---
   if (_rxReady) {
     _rxReady = false;
-    Serial.println("[LORA] ISR fired — packet arrived");
 
     int next = (_rxHead + 1) % LORA_RX_QUEUE_SIZE;
     if (next != _rxTail) {  // queue has space
       LoRaRxEntry& e = _rxQueue[_rxHead];
       uint8_t pktLen = (uint8_t)_radio.getPacketLength();
-      Serial.printf("[LORA] getPacketLength=%d\n", pktLen);
       if (pktLen > sizeof(MeshPacket)) pktLen = sizeof(MeshPacket);
 
       int state = _radio.readData(e.data, pktLen);
-      Serial.printf("[LORA] readData state=%d\n", state);
       if (state == RADIOLIB_ERR_NONE) {
         e.len  = pktLen;
         e.rssi = _radio.getRSSI();
         e.snr  = _radio.getSNR();
-        Serial.printf("[LORA] queued len=%d RSSI=%.1fdBm SNR=%.1fdB\n", pktLen, e.rssi, e.snr);
         _rxHead = next;
-      } else {
-        Serial.printf("[LORA] readData FAILED state=%d (CRC or frame error)\n", state);
       }
+      // Silently discard CRC errors — LoRa CRC handles this
     } else {
       Serial.println("[LORA] RX queue full — packet dropped");
       _radio.readData((uint8_t*)nullptr, 0);  // flush the radio buffer
@@ -270,15 +265,6 @@ void loopLoRa() {
 
     if (e.len >= MESH_HDR_SIZE) {
       MeshPacket* pkt = (MeshPacket*)e.data;
-      Serial.printf("[LORA] processing type=0x%02X msgId=0x%08X "
-                    "src=%02X:%02X:%02X:%02X:%02X:%02X dst=%02X:%02X:%02X:%02X:%02X:%02X "
-                    "appId=0x%02X payloadLen=%d\n",
-                    pkt->type, pkt->msgId,
-                    pkt->srcMac[0], pkt->srcMac[1], pkt->srcMac[2],
-                    pkt->srcMac[3], pkt->srcMac[4], pkt->srcMac[5],
-                    pkt->destMac[0], pkt->destMac[1], pkt->destMac[2],
-                    pkt->destMac[3], pkt->destMac[4], pkt->destMac[5],
-                    pkt->appId, pkt->payloadLen);
 
       if (!isSeenLoRa(pkt->msgId)) {
         markSeenLoRa(pkt->msgId);
@@ -297,11 +283,7 @@ void loopLoRa() {
         // Let the coordinator mark this node's transport as LoRa
         extern void updateNodeLoRa(uint8_t* mac, float rssi, float snr);
         updateNodeLoRa(pkt->srcMac, e.rssi, e.snr);
-      } else {
-        Serial.printf("[LORA] duplicate msgId=0x%08X — skipped\n", pkt->msgId);
       }
-    } else {
-      Serial.printf("[LORA] packet too short len=%d (min=%d) — dropped\n", e.len, MESH_HDR_SIZE);
     }
 
     _rxTail = (_rxTail + 1) % LORA_RX_QUEUE_SIZE;
