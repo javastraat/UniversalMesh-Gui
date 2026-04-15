@@ -6,3 +6,4 @@ void logPacket(uint8_t type, uint8_t* senderMac, uint8_t* origSrcMac, uint8_t ap
 void addSerialLog(const char* msg);
 void lockMeshData();
 void unlockMeshData();
+String getLogJson();   // returns the /api/log JSON string (for /api/fast)

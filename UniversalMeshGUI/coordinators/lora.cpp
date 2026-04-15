@@ -230,13 +230,27 @@ bool loraSend(const uint8_t* data, uint8_t len, float freqMHz = 0.0f) {
   return true;
 }
 
-// loraStandby() — put radio in standby (stops RX, disables ISR triggers).
-// Call before OTA to prevent SPI conflicts and interrupt storms during flash write.
+// loraStandby() — detach the radio ISR before OTA.
+// Must NOT do any SPI: _radio.standby() blocks waiting for BUSY pin which can
+// stall the lwIP task on Core 0 and prevent the W5500 from filling the OTA TCP
+// receive buffer.  The LR1121 is on SPI2, W5500 on SPI3 — no bus conflict, so
+// leaving the radio in RX mode is safe.  Detaching the IRQ is enough to stop
+// interrupt storms during flash write.
 void loraStandby() {
-  _radio.standby();
+  detachInterrupt(digitalPinToInterrupt(RADIO_IRQ));
   _rxReady = false;
   _txDone  = false;
-  Serial.println("[LORA] Radio in standby for OTA.");
+  Serial.println("[LORA] Radio ISR detached for OTA.");
+}
+
+// loraResume() — re-attach ISR and re-arm RX after OTA completes or fails.
+void loraResume() {
+  _rxReady = false;
+  _txDone  = false;
+  _radio.setPacketSentAction(_isrRadio);
+  _radio.setPacketReceivedAction(_isrRadio);
+  _radio.startReceive();
+  Serial.println("[LORA] Radio resumed.");
 }
 
 // loraSendPacket() — convenience wrapper: only sends header + actual payload,
@@ -388,6 +402,7 @@ void loopLoRa() {
 void setupLoRa()                                      {}
 void loopLoRa()                                       {}
 void loraStandby()                                    {}
+void loraResume()                                     {}
 bool loraSend(const uint8_t*, uint8_t, float)         { return false; }
 bool loraSendPacket(MeshPacket*, float)               { return false; }
 void loraOnReceive(MeshReceiveCallback)               {}

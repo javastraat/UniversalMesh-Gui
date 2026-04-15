@@ -24,6 +24,7 @@ extern bool   isEthConnected();
 extern bool   isEthLinkUp();
 extern bool   isOtaInProgress();
 extern void   setOtaBeginCallback(void(*cb)());
+extern void   setOtaEndCallback(void(*cb)());
 extern String getEthSubnet();
 extern String getEthDNS();
 extern bool   isNtpSynced();
@@ -34,6 +35,7 @@ extern String getNtpTimeStr();
 extern void setupLoRa();
 extern void loopLoRa();
 extern void loraStandby();
+extern void loraResume();
 extern bool loraSendPacket(MeshPacket* pkt, float freqMHz = 0.0f);
 extern bool loraBridgePacket(MeshPacket* pkt);
 extern void loraOnReceive(MeshReceiveCallback cb);
@@ -474,6 +476,7 @@ void setup() {
   addSerialLog("[LORA] LR1121 bridge active (868 MHz SF12)");
   // Put LoRa radio in standby when OTA starts — stops ISR storms during flash write
   setOtaBeginCallback(loraStandby);
+  setOtaEndCallback(loraResume);
 #endif
 
   // 3. Setup REST API Endpoint for Injecting Packets
@@ -543,38 +546,52 @@ void setup() {
     request->send(200, "application/json", "{\"status\":\"discovery_initiated\"}");
   });
 
-  server.on("/api/nodes", HTTP_GET, [](AsyncWebServerRequest *request) {
-    // Snapshot under lock to prevent PSRAM cache coherency race with onMeshMessage
+  // Helper lambda — builds the nodes JSON array (shared by /api/nodes and /api/fast)
+  auto buildNodesJson = []() -> String {
     KnownNode snap[MAX_NODES];
     lockMeshData();
     memcpy(snap, meshNodes, sizeof(snap));
     unlockMeshData();
-
     JsonDocument doc;
-    JsonArray nodesArray = doc["nodes"].to<JsonArray>();
+    JsonArray arr = doc["nodes"].to<JsonArray>();
     unsigned long now = millis();
     for (int i = 0; i < MAX_NODES; i++) {
-      if (snap[i].active) {
-        JsonObject nodeObj = nodesArray.add<JsonObject>();
-        char macStr[18];
-        snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
-                 snap[i].mac[0], snap[i].mac[1], snap[i].mac[2],
-                 snap[i].mac[3], snap[i].mac[4], snap[i].mac[5]);
-        nodeObj["mac"] = macStr;
-        nodeObj["last_seen_seconds_ago"] = (now - snap[i].lastSeen) / 1000;
-        if (snap[i].name[0]) nodeObj["name"] = snap[i].name;
-        nodeObj["transport"] = snap[i].transport == TRANSPORT_LORA_868  ? "lora_868"  :
-                               snap[i].transport == TRANSPORT_LORA_2400 ? "lora_2400" : "espnow";
-        if (snap[i].transport == TRANSPORT_LORA_868 || snap[i].transport == TRANSPORT_LORA_2400) {
-          nodeObj["rssi_dbm"] = serialized(String(snap[i].loraRssi, 1));
-          nodeObj["snr_db"]   = serialized(String(snap[i].loraSNR,  1));
-        }
+      if (!snap[i].active) continue;
+      JsonObject o = arr.add<JsonObject>();
+      char macStr[18];
+      snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+               snap[i].mac[0], snap[i].mac[1], snap[i].mac[2],
+               snap[i].mac[3], snap[i].mac[4], snap[i].mac[5]);
+      o["mac"] = macStr;
+      o["last_seen_seconds_ago"] = (now - snap[i].lastSeen) / 1000;
+      if (snap[i].name[0]) o["name"] = snap[i].name;
+      o["transport"] = snap[i].transport == TRANSPORT_LORA_868  ? "lora_868"  :
+                       snap[i].transport == TRANSPORT_LORA_2400 ? "lora_2400" : "espnow";
+      if (snap[i].transport == TRANSPORT_LORA_868 || snap[i].transport == TRANSPORT_LORA_2400) {
+        o["rssi_dbm"] = serialized(String(snap[i].loraRssi, 1));
+        o["snr_db"]   = serialized(String(snap[i].loraSNR,  1));
       }
     }
+    String out; serializeJson(doc, out); return out;
+  };
 
-    String response;
-    serializeJson(doc, response);
-    request->send(200, "application/json", response);
+  server.on("/api/nodes", HTTP_GET, [buildNodesJson](AsyncWebServerRequest *request) {
+    request->send(200, "application/json", buildNodesJson());
+  });
+
+  // /api/fast — nodes + log in one round trip, halving HTTP overhead vs two parallel requests
+  server.on("/api/fast", HTTP_GET, [buildNodesJson](AsyncWebServerRequest *request) {
+    String nodesJson = buildNodesJson();  // {"nodes":[...]}
+    String logJson   = getLogJson();      // {"packets":[...]}
+    // Build {"nodes":[...],"log":[...]}
+    // - strip closing '}' from nodesJson
+    // - extract the array '[...]' from logJson (everything from first '[')
+    nodesJson.remove(nodesJson.length() - 1);
+    int logStart = logJson.indexOf('[');
+    int logEnd   = logJson.lastIndexOf(']');
+    String logArray = (logStart >= 0 && logEnd > logStart) ? logJson.substring(logStart, logEnd + 1) : "[]";
+    String resp = nodesJson + ",\"log\":" + logArray + "}";
+    request->send(200, "application/json", resp);
   });
 
 #ifdef HAS_LORA

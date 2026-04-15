@@ -861,10 +861,9 @@ function fixCoord(){
     }
     async function refreshFast(){
       try{
-        const [nd,lg]=await Promise.all([
-          fetchJ('/api/nodes'),
-          fetchJ('/api/log')
-        ]);
+        const r=await fetchJ('/api/fast');
+        const nd={nodes:r.nodes||[]};
+        const lg={packets:r.log||[]};
         renderNodes(nd.nodes||[]);
         nodeNames_={};
         const nodes=nd.nodes||[];
@@ -930,11 +929,40 @@ function fixCoord(){
     }
     // Self-scheduling: next call only fires after previous completes — no pileup
     (async function loopFast(){ await refreshFast(); setTimeout(loopFast, 1000); })();
-    (async function loopSlow(){ await refreshSlow(); setTimeout(loopSlow, 5000); })();
+    (async function loopSlow(){ await refreshSlow(); setTimeout(loopSlow, 15000); })();
   </script>
 </body>
 </html>
 )rawliteral";
+
+// --- Shared log builder (used by /api/log and /api/fast) ---
+String getLogJson() {
+  lockMeshData();
+  int head  = _logHead;
+  int count = _logCount;
+  unlockMeshData();
+  String json = "{\"packets\":[";
+  int start = count < LOG_SIZE ? 0 : head;
+  for (int i = 0; i < count; i++) {
+    const PacketLog& p = _log[(start + i) % LOG_SIZE];
+    if (i > 0) json += ",";
+    json += "{\"type\":"; json += p.type; json += ",";
+    json += "\"src\":\"";     json += p.src;     json += "\",";
+    json += "\"origSrc\":\""; json += p.origSrc; json += "\",";
+    json += "\"appId\":";  json += p.appId;  json += ",";
+    json += "\"payload\":\"";
+    for (const char* c = p.payload; *c; c++) {
+      uint8_t b = (uint8_t)*c;
+      if      (b == '"')  json += "\\\"";
+      else if (b == '\\') json += "\\\\";
+      else if (b < 0x20)  { char esc[7]; snprintf(esc, sizeof(esc), "\\u%04x", b); json += esc; }
+      else                json += *c;
+    }
+    json += "\",\"age_s\":"; json += (millis() - p.ts) / 1000; json += "}";
+  }
+  json += "]}";
+  return json;
+}
 
 // --- Endpoints ---
 void initWebDashboard(AsyncWebServer& server) {
@@ -1049,37 +1077,7 @@ void initWebDashboard(AsyncWebServer& server) {
   });
 
   server.on("/api/log", HTTP_GET, [](AsyncWebServerRequest* request) {
-    // Snapshot indices under lock only — keep lock time in microseconds, not milliseconds
-    lockMeshData();
-    int head  = _logHead;
-    int count = _logCount;
-    unlockMeshData();
-
-    String json = "{\"packets\":[";
-    int start = count < LOG_SIZE ? 0 : head;
-    for (int i = 0; i < count; i++) {
-      const PacketLog& p = _log[(start + i) % LOG_SIZE];
-      if (i > 0) json += ",";
-      json += "{";
-      json += "\"type\":"     + String(p.type)    + ",";
-      json += "\"src\":\""   + String(p.src)    + "\",";
-      json += "\"origSrc\":\"" + String(p.origSrc) + "\",";
-      json += "\"appId\":"  + String(p.appId)  + ",";
-      // Escape payload — raw bytes (e.g. 0x01) must not appear unescaped in JSON
-      json += "\"payload\":\"";
-      for (const char* c = p.payload; *c; c++) {
-        uint8_t b = (uint8_t)*c;
-        if      (b == '"')  json += "\\\"";
-        else if (b == '\\') json += "\\\\";
-        else if (b < 0x20)  { char esc[7]; snprintf(esc, sizeof(esc), "\\u%04x", b); json += esc; }
-        else                json += *c;
-      }
-      json += "\",";
-      json += "\"age_s\":" + String((millis() - p.ts) / 1000);
-      json += "}";
-    }
-    json += "]}";
-    request->send(200, "application/json", json);
+    request->send(200, "application/json", getLogJson());
   });
 
   server.on("/api/serial", HTTP_GET, [](AsyncWebServerRequest* request) {

@@ -41,7 +41,9 @@ static bool ntpStarted   = false;
 static bool otaActive    = false;
 
 static void (*_otaBeginCb)() = nullptr;
+static void (*_otaEndCb)()   = nullptr;
 void setOtaBeginCallback(void(*cb)()) { _otaBeginCb = cb; }
+void setOtaEndCallback(void(*cb)())   { _otaEndCb   = cb; }
 bool isOtaInProgress() { return otaActive; }
 
 static void startNTP() {
@@ -75,6 +77,8 @@ static void startOTA() {
         Serial.println("[OTA] Starting update — pausing mesh/MQTT/LoRa...");
     });
     ArduinoOTA.onEnd([]() {
+        otaActive = false;
+        if (_otaEndCb) _otaEndCb();
         Serial.println("\n[OTA] Done — rebooting.");
     });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
