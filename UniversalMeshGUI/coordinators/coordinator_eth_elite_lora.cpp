@@ -13,6 +13,9 @@
 #ifndef MESH_NETWORK
   #define MESH_NETWORK "mesh"
 #endif
+#ifndef LORA_IDENT
+  #define LORA_IDENT "PD2EMC"
+#endif
 
 #include <ETH.h>
 #include <Preferences.h>
@@ -158,22 +161,25 @@ static void scheduleLoRaWelcome(const uint8_t* mac, const char* name) {
       _welcomeQueue[i].name[sizeof(_welcomeQueue[i].name) - 1] = '\0';
       _welcomeQueue[i].triggerAt = millis() + 10000UL;
       _welcomeQueue[i].pending   = true;
-      Serial.printf("[LORA] Welcome scheduled for %02X:%02X:%02X:%02X:%02X:%02X in 10s\n",
-                    mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+      char schedMsg[80];
+      snprintf(schedMsg, sizeof(schedMsg), "[LORA] Welcome scheduled for %02X:%02X:%02X:%02X:%02X:%02X in 10s",
+               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+      Serial.println(schedMsg);
+      addSerialLog(schedMsg);
       return;
     }
   }
   Serial.println("[LORA] Welcome queue full — skipping");
+  addSerialLog("[LORA] Welcome queue full — skipping");
 }
 
 static void drainLoRaWelcomes() {
-  if (!isNtpSynced()) return;
   unsigned long now = millis();
   for (int i = 0; i < LORA_WELCOME_QUEUE_SIZE; i++) {
     if (!_welcomeQueue[i].pending || now < _welcomeQueue[i].triggerAt) continue;
     _welcomeQueue[i].pending = false;
 
-    // Ident string: node name if known, otherwise compact MAC
+    // Node name for the log line (not sent in RIC 8 — that always carries LORA_IDENT)
     char identStr[32];
     if (_welcomeQueue[i].name[0]) {
       strncpy(identStr, _welcomeQueue[i].name, sizeof(identStr) - 1);
@@ -184,9 +190,9 @@ static void drainLoRaWelcomes() {
                _welcomeQueue[i].mac[3], _welcomeQueue[i].mac[4], _welcomeQueue[i].mac[5]);
     }
 
-    // RIC 8 — ident: {"ric":8,"func":3,"msg":"<name>"}
+    // RIC 8 — ident: always send, no NTP required
     char identJson[80];
-    snprintf(identJson, sizeof(identJson), "{\"ric\":8,\"func\":3,\"msg\":\"%s\"}", identStr);
+    snprintf(identJson, sizeof(identJson), "{\"ric\":8,\"func\":3,\"msg\":\"%s\"}", LORA_IDENT);
 
     MeshPacket identPkt = {};
     identPkt.type       = MESH_TYPE_DATA;
@@ -199,27 +205,33 @@ static void drainLoRaWelcomes() {
     memcpy(identPkt.payload, identJson, identPkt.payloadLen);
     loraSendPacket(&identPkt);
 
-    // RIC 224 — time: {"ric":224,"func":3,"msg":"YYYYMMDDHHMMSS<yymmddHHMMSS>"}
-    struct tm t;
-    getLocalTime(&t);
-    char timeSuffix[14];
-    strftime(timeSuffix, sizeof(timeSuffix), "%y%m%d%H%M%S", &t);  // 2-digit year, matches Python
-    char timeJson[80];
-    snprintf(timeJson, sizeof(timeJson), "{\"ric\":224,\"func\":3,\"msg\":\"YYYYMMDDHHMMSS%s\"}", timeSuffix);
+    char logMsg[128];
 
-    MeshPacket timePkt = {};
-    timePkt.type        = MESH_TYPE_DATA;
-    timePkt.ttl         = 3;
-    timePkt.msgId       = (uint32_t)(millis() ^ (esp_random() & 0xFFFF));
-    memcpy(timePkt.destMac, _welcomeQueue[i].mac, 6);
-    esp_wifi_get_mac(WIFI_IF_STA, timePkt.srcMac);
-    timePkt.appId       = 0x01;
-    timePkt.payloadLen  = (uint8_t)strlen(timeJson);
-    memcpy(timePkt.payload, timeJson, timePkt.payloadLen);
-    loraSendPacket(&timePkt);
+    // RIC 224 — time: only if NTP is synced, skip gracefully if not
+    if (isNtpSynced()) {
+      struct tm t;
+      getLocalTime(&t);
+      char timeSuffix[14];
+      strftime(timeSuffix, sizeof(timeSuffix), "%y%m%d%H%M%S", &t);
+      char timeJson[80];
+      snprintf(timeJson, sizeof(timeJson), "{\"ric\":224,\"func\":3,\"msg\":\"YYYYMMDDHHMMSS%s\"}", timeSuffix);
 
-    char logMsg[96];
-    snprintf(logMsg, sizeof(logMsg), "[LORA] Welcomed '%s': %s + %s", identStr, identJson, timeJson);
+      MeshPacket timePkt = {};
+      timePkt.type        = MESH_TYPE_DATA;
+      timePkt.ttl         = 3;
+      timePkt.msgId       = (uint32_t)(millis() ^ (esp_random() & 0xFFFF));
+      memcpy(timePkt.destMac, _welcomeQueue[i].mac, 6);
+      esp_wifi_get_mac(WIFI_IF_STA, timePkt.srcMac);
+      timePkt.appId       = 0x01;
+      timePkt.payloadLen  = (uint8_t)strlen(timeJson);
+      memcpy(timePkt.payload, timeJson, timePkt.payloadLen);
+      loraSendPacket(&timePkt);
+
+      snprintf(logMsg, sizeof(logMsg), "[LORA] Welcomed '%s': RIC8+RIC224 sent", identStr);
+    } else {
+      snprintf(logMsg, sizeof(logMsg), "[LORA] Welcomed '%s': RIC8 sent (NTP not synced, RIC224 skipped)", identStr);
+    }
+
     Serial.println(logMsg);
     addSerialLog(logMsg);
   }

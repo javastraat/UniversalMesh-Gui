@@ -33,12 +33,15 @@
 #define ETH_RST_PIN    -1
 #define ETH_PHY_ADDR    1
 
-static bool ethConnected = false;
-static bool ethLinkUp    = false;
-static bool otaStarted   = false;
-static bool mdnsStarted  = false;
-static bool ntpStarted   = false;
-static bool otaActive    = false;
+// volatile: these flags are written by the ETH event task (Core 0) and read by loop() (Core 1).
+// Without volatile, the compiler may cache the initial false in a register and never call
+// ArduinoOTA.handle(), making OTA completely invisible to espota.py.
+static volatile bool ethConnected = false;
+static volatile bool ethLinkUp    = false;
+static volatile bool otaStarted   = false;
+static volatile bool mdnsStarted  = false;
+static volatile bool ntpStarted   = false;
+static volatile bool otaActive    = false;
 
 static void (*_otaBeginCb)() = nullptr;
 static void (*_otaEndCb)()   = nullptr;
