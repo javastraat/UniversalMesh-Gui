@@ -6,7 +6,13 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
+#include <Update.h>
 #include <freertos/semphr.h>
+
+#ifdef HAS_LORA
+extern void loraStandby();
+extern void loraResume();
+#endif
 
 #ifdef LILYGO_T_ETH_ELITE
 extern bool    isNtpSynced();
@@ -199,6 +205,21 @@ R"rawliteral(
         <button id="msg-send-btn" onclick="sendMsg()" class="btn btn-primary">Send (App&nbsp;0x01)</button>
       </div>
       <div id="msg-status" style="margin-top:6px;font-size:0.85em;color:var(--sub);text-align:center"></div>
+    </div>
+    <div class="card" id="ota-card">
+      <h2>Firmware Update</h2>
+      <div class="row" style="margin-bottom:8px">
+        <input type="file" id="ota-file" accept=".bin" style="flex:1;min-width:0;font-size:0.9em;color:var(--text)">
+      </div>
+      <div class="action-buttons-vertical">
+        <button id="ota-btn" onclick="startOTA()" class="btn btn-danger">Flash firmware</button>
+      </div>
+      <div id="ota-progress" style="display:none;margin-top:10px">
+        <div style="background:var(--row-bg);border-radius:4px;height:8px;overflow:hidden">
+          <div id="ota-bar" style="background:#f0c040;height:100%;width:0%;transition:width 0.3s"></div>
+        </div>
+        <div id="ota-status" style="margin-top:6px;font-size:0.85em;color:var(--sub);text-align:center"></div>
+      </div>
     </div>
     <div class="card" id="lora-card" style="display:none">
       <h2>Send via LoRa</h2>
@@ -927,6 +948,47 @@ function fixCoord(){
       if(_consoleOpen){refreshConsole();_consoleInterval=setInterval(refreshConsole,2000);}
       else{clearInterval(_consoleInterval);_consoleInterval=null;}
     }
+    function startOTA(){
+      const file=document.getElementById('ota-file').files[0];
+      if(!file){alert('Select a firmware .bin file first');return;}
+      if(!confirm('Flash '+file.name+' ('+Math.round(file.size/1024)+' KB)?\nThe device will reboot when done.')) return;
+      const btn=document.getElementById('ota-btn');
+      const prog=document.getElementById('ota-progress');
+      const bar=document.getElementById('ota-bar');
+      const status=document.getElementById('ota-status');
+      btn.disabled=true; prog.style.display='';
+      bar.style.width='0%'; bar.style.background='#f0c040';
+      status.style.color='var(--sub)'; status.textContent='Uploading\u2026';
+      const xhr=new XMLHttpRequest();
+      xhr.open('POST','/api/ota');
+      xhr.upload.onprogress=e=>{
+        if(e.lengthComputable){
+          const pct=Math.round(e.loaded/e.total*100);
+          bar.style.width=pct+'%';
+          status.textContent='Uploading\u2026 '+pct+'%';
+        }
+      };
+      xhr.onload=()=>{
+        try{
+          const r=JSON.parse(xhr.responseText);
+          if(r.status==='ok'){
+            bar.style.width='100%'; bar.style.background='#3fb950';
+            status.style.color='#3fb950'; status.textContent='Done! Rebooting\u2026';
+          } else {
+            bar.style.background='#dc3545';
+            status.style.color='#dc3545'; status.textContent='Error: '+(r.error||'flash failed');
+            btn.disabled=false;
+          }
+        }catch(e){ bar.style.width='100%'; bar.style.background='#3fb950'; status.style.color='#3fb950'; status.textContent='Done! Rebooting\u2026'; }
+      };
+      xhr.onerror=()=>{
+        bar.style.width='100%'; bar.style.background='#3fb950';
+        status.style.color='#3fb950'; status.textContent='Done! Rebooting\u2026';
+      };
+      const form=new FormData();
+      form.append('firmware',file,file.name);
+      xhr.send(form);
+    }
     // Self-scheduling: next call only fires after previous completes — no pileup
     (async function loopFast(){ await refreshFast(); setTimeout(loopFast, 1000); })();
     (async function loopSlow(){ await refreshSlow(); setTimeout(loopSlow, 15000); })();
@@ -1075,6 +1137,46 @@ void initWebDashboard(AsyncWebServer& server) {
     delay(200);
     ESP.restart();
   });
+
+  server.on("/api/ota", HTTP_POST,
+    [](AsyncWebServerRequest* request) {
+      bool ok = !Update.hasError();
+      if (ok) {
+        addSerialLog("[OTA] HTTP flash complete — rebooting");
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+        delay(500);
+        ESP.restart();
+      } else {
+        String err = Update.errorString();
+        addSerialLog(("[OTA] Flash error: " + err).c_str());
+#ifdef HAS_LORA
+        loraResume();
+#endif
+        request->send(500, "application/json", "{\"status\":\"error\",\"error\":\"" + err + "\"}");
+      }
+    },
+    [](AsyncWebServerRequest* request, const String& filename, size_t index, uint8_t* data, size_t len, bool final) {
+      if (!index) {
+        Serial.printf("[OTA] HTTP upload: %s (%u bytes)\n", filename.c_str(), request->contentLength());
+        addSerialLog("[OTA] HTTP firmware upload started");
+#ifdef HAS_LORA
+        loraStandby();
+#endif
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
+          Serial.printf("[OTA] begin() error: %s\n", Update.errorString());
+          addSerialLog("[OTA] begin() failed");
+        }
+      }
+      if (len && Update.write(data, len) != len) {
+        Serial.printf("[OTA] write error: %s\n", Update.errorString());
+      }
+      if (final) {
+        if (!Update.end(true)) {
+          Serial.printf("[OTA] end() error: %s\n", Update.errorString());
+        }
+      }
+    }
+  );
 
   server.on("/api/log", HTTP_GET, [](AsyncWebServerRequest* request) {
     request->send(200, "application/json", getLogJson());

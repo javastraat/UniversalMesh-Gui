@@ -134,6 +134,12 @@ static void onEthEvent(arduino_event_id_t event) {
             Serial.println("[ETH] Link Up");
             ethLinkUp = true;
             break;
+        case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+            Serial.printf("[WIFI] IP: %s\n", WiFi.localIP().toString().c_str());
+            startOTA();
+            startMDNS();
+            startNTP();
+            break;
         case ARDUINO_EVENT_ETH_GOT_IP:
             Serial.printf("[ETH] IP: %s  MAC: %s  %dMbps %s\n",
                 ETH.localIP().toString().c_str(),

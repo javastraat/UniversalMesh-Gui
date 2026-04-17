@@ -146,6 +146,7 @@ struct LoRaWelcome {
   char          name[32];
   unsigned long triggerAt;
   bool          pending;
+  bool          ric8Sent;   // RIC 8 ident already sent; still waiting to send RIC 224
 };
 static LoRaWelcome _welcomeQueue[LORA_WELCOME_QUEUE_SIZE];
 
