@@ -135,6 +135,97 @@ void setMeshChannel(uint8_t ch) {
   Serial.printf("[MESH] Channel changed to %d\n", ch);
 }
 
+// --- LoRa welcome queue — ident (RIC 8) + time (RIC 224) sent 10s after a node announces via LoRa ---
+#ifdef HAS_LORA
+#define LORA_WELCOME_QUEUE_SIZE 4
+struct LoRaWelcome {
+  uint8_t       mac[6];
+  char          name[32];
+  unsigned long triggerAt;
+  bool          pending;
+};
+static LoRaWelcome _welcomeQueue[LORA_WELCOME_QUEUE_SIZE];
+
+static void scheduleLoRaWelcome(const uint8_t* mac, const char* name) {
+  // Skip if this MAC is already queued
+  for (int i = 0; i < LORA_WELCOME_QUEUE_SIZE; i++) {
+    if (_welcomeQueue[i].pending && memcmp(_welcomeQueue[i].mac, mac, 6) == 0) return;
+  }
+  for (int i = 0; i < LORA_WELCOME_QUEUE_SIZE; i++) {
+    if (!_welcomeQueue[i].pending) {
+      memcpy(_welcomeQueue[i].mac, mac, 6);
+      strncpy(_welcomeQueue[i].name, name ? name : "", sizeof(_welcomeQueue[i].name) - 1);
+      _welcomeQueue[i].name[sizeof(_welcomeQueue[i].name) - 1] = '\0';
+      _welcomeQueue[i].triggerAt = millis() + 10000UL;
+      _welcomeQueue[i].pending   = true;
+      Serial.printf("[LORA] Welcome scheduled for %02X:%02X:%02X:%02X:%02X:%02X in 10s\n",
+                    mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+      return;
+    }
+  }
+  Serial.println("[LORA] Welcome queue full — skipping");
+}
+
+static void drainLoRaWelcomes() {
+  if (!isNtpSynced()) return;
+  unsigned long now = millis();
+  for (int i = 0; i < LORA_WELCOME_QUEUE_SIZE; i++) {
+    if (!_welcomeQueue[i].pending || now < _welcomeQueue[i].triggerAt) continue;
+    _welcomeQueue[i].pending = false;
+
+    // Ident string: node name if known, otherwise compact MAC
+    char identStr[32];
+    if (_welcomeQueue[i].name[0]) {
+      strncpy(identStr, _welcomeQueue[i].name, sizeof(identStr) - 1);
+      identStr[sizeof(identStr) - 1] = '\0';
+    } else {
+      snprintf(identStr, sizeof(identStr), "%02X%02X%02X%02X%02X%02X",
+               _welcomeQueue[i].mac[0], _welcomeQueue[i].mac[1], _welcomeQueue[i].mac[2],
+               _welcomeQueue[i].mac[3], _welcomeQueue[i].mac[4], _welcomeQueue[i].mac[5]);
+    }
+
+    // RIC 8 — ident: {"ric":8,"func":3,"msg":"<name>"}
+    char identJson[80];
+    snprintf(identJson, sizeof(identJson), "{\"ric\":8,\"func\":3,\"msg\":\"%s\"}", identStr);
+
+    MeshPacket identPkt = {};
+    identPkt.type       = MESH_TYPE_DATA;
+    identPkt.ttl        = 3;
+    identPkt.msgId      = (uint32_t)(millis() ^ (esp_random() & 0xFFFF));
+    memcpy(identPkt.destMac, _welcomeQueue[i].mac, 6);
+    esp_wifi_get_mac(WIFI_IF_STA, identPkt.srcMac);
+    identPkt.appId      = 0x01;
+    identPkt.payloadLen = (uint8_t)strlen(identJson);
+    memcpy(identPkt.payload, identJson, identPkt.payloadLen);
+    loraSendPacket(&identPkt);
+
+    // RIC 224 — time: {"ric":224,"func":3,"msg":"YYYYMMDDHHMMSS<yymmddHHMMSS>"}
+    struct tm t;
+    getLocalTime(&t);
+    char timeSuffix[14];
+    strftime(timeSuffix, sizeof(timeSuffix), "%y%m%d%H%M%S", &t);  // 2-digit year, matches Python
+    char timeJson[80];
+    snprintf(timeJson, sizeof(timeJson), "{\"ric\":224,\"func\":3,\"msg\":\"YYYYMMDDHHMMSS%s\"}", timeSuffix);
+
+    MeshPacket timePkt = {};
+    timePkt.type        = MESH_TYPE_DATA;
+    timePkt.ttl         = 3;
+    timePkt.msgId       = (uint32_t)(millis() ^ (esp_random() & 0xFFFF));
+    memcpy(timePkt.destMac, _welcomeQueue[i].mac, 6);
+    esp_wifi_get_mac(WIFI_IF_STA, timePkt.srcMac);
+    timePkt.appId       = 0x01;
+    timePkt.payloadLen  = (uint8_t)strlen(timeJson);
+    memcpy(timePkt.payload, timeJson, timePkt.payloadLen);
+    loraSendPacket(&timePkt);
+
+    char logMsg[96];
+    snprintf(logMsg, sizeof(logMsg), "[LORA] Welcomed '%s': %s + %s", identStr, identJson, timeJson);
+    Serial.println(logMsg);
+    addSerialLog(logMsg);
+  }
+}
+#endif  // HAS_LORA
+
 // --- ROUTING TABLE ---
 #define MAX_NODES 20
 
@@ -369,6 +460,17 @@ static void handleIncomingPacket(MeshPacket* packet, uint8_t* senderMac, bool fr
   // TX queue, so chatty nodes don't fill the queue with stale readings.
   if (!fromLora) {
     loraBridgePacket(packet);
+  }
+
+  // Welcome: when a node announces itself over LoRa, schedule RIC 8 + RIC 224 reply in 10s
+  if (fromLora && (packet->type == MESH_TYPE_PING || packet->appId == 0x06)) {
+    char nodeName[32] = {};
+    if (packet->payloadLen > 0) {
+      uint8_t nlen = packet->payloadLen < 31 ? packet->payloadLen : 31;
+      memcpy(nodeName, packet->payload, nlen);
+      nodeName[nlen] = '\0';
+    }
+    scheduleLoRaWelcome(packet->srcMac, nodeName);
   }
 #endif
 }
@@ -639,6 +741,7 @@ void loop() {
 
 #ifdef HAS_LORA
   loopLoRa();
+  drainLoRaWelcomes();
 #endif
   mqttConnect();
   _mqtt.loop();
