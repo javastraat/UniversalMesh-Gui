@@ -18,6 +18,9 @@ except ImportError:
 #COORDINATOR_IP = "universalmesh.local"
 COORDINATOR_IP = "192.168.2.193"
 
+# Default identification message text (can be overridden via --ident-msg)
+DEFAULT_IDENT_MSG_TEXT = "PD2EMC"
+
 APP_ID_TEXT = 1  # Tells the Gateway to decode as ASCII
 
 # Random message pool
@@ -212,6 +215,7 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--dest', type=str, help='Destination MAC address (overrides interactive selection)')
     parser.add_argument('--no-prompt', action='store_true', help='Skip interactive node selection and use broadcast')
     parser.add_argument('--ident', action='store_true', help='Send identification message {"ric":8,"func":3,"msg":"PD2EMC"}')
+    parser.add_argument('--ident-msg', type=str, default=None, help='Custom text for identification message (overrides default "PD2EMC")')
     parser.add_argument('--pager-time', action='store_true', help='Send pager date/time set message {"ric":224,"func":3,"msg":"YYYYMMDDHHMMSSddmmyyHHMMSS"}')
     parser.add_argument('--list', action='store_true', help='List all nodes and exit')
     args = parser.parse_args()
@@ -248,7 +252,8 @@ if __name__ == "__main__":
 
     # Command-line message options
     if args.ident:
-        msg_text = '{"ric":8,"func":3,"msg":"PD2EMC"}'
+        ident_text = args.ident_msg or DEFAULT_IDENT_MSG_TEXT
+        msg_text = f'{{"ric":8,"func":3,"msg":"{ident_text}"}}'
     elif args.pager_time:
         now = datetime.datetime.now()
         ric = 224
@@ -284,9 +289,10 @@ if __name__ == "__main__":
                 msg_text = pager_msg
                 break
             elif choice == "4":
-                ident_msg = '{"ric":8,"func":3,"msg":"PD2EMC"}'
-                print(f"Identification message: {ident_msg}")
-                msg_text = ident_msg
+                print("\nEnter identification text (or press Enter for default 'PD2EMC'):")
+                custom_ident = input("> ").strip() or DEFAULT_IDENT_MSG_TEXT
+                msg_text = f'{{"ric":8,"func":3,"msg":"{custom_ident}"}}'
+                print(f"Identification message: {msg_text}")
                 break
             else:
                 print("Invalid selection. Try again.")
