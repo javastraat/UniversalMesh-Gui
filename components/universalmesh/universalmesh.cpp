@@ -31,7 +31,6 @@ void UniversalMeshComponent::setup() {
   if (connect_to_coordinator_()) {
     ESP_LOGI(TAG, "Coordinator found on channel %d", mesh_channel_);
     last_heartbeat_ = millis() - heartbeat_interval_ms_;
-    last_sensor_    = millis() - update_interval_ms_;
   } else {
     ESP_LOGW(TAG, "Coordinator not found — will retry every 30s");
   }
@@ -65,7 +64,6 @@ void UniversalMeshComponent::loop() {
       if (connect_to_coordinator_()) {
         ESP_LOGI(TAG, "Coordinator found on channel %d", mesh_channel_);
         last_heartbeat_ = millis() - heartbeat_interval_ms_;
-        last_sensor_    = millis() - update_interval_ms_;
       }
     }
     return;
@@ -77,11 +75,10 @@ void UniversalMeshComponent::loop() {
     last_heartbeat_ = now;
     send_heartbeat_();
   }
+}
 
-  if (now - last_sensor_ >= update_interval_ms_) {
-    last_sensor_ = now;
-    send_sensors_();
-  }
+void UniversalMeshComponent::update() {
+  if (connected_) send_sensors_();
 }
 
 void UniversalMeshComponent::send_heartbeat_() {

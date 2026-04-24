@@ -11,10 +11,9 @@
 namespace esphome {
 namespace universalmesh {
 
-class UniversalMeshComponent : public Component {
+class UniversalMeshComponent : public PollingComponent {
  public:
   void set_node_name(const char *name) { node_name_ = name; }
-  void set_mesh_update_interval(uint32_t ms) { update_interval_ms_ = ms; }
   void set_heartbeat_interval_ms(uint32_t ms) { heartbeat_interval_ms_ = ms; }
 
   void register_sensor(const char *key, sensor::Sensor *s) {
@@ -23,6 +22,7 @@ class UniversalMeshComponent : public Component {
 
   void setup() override;
   void loop() override;
+  void update() override;  // called by ESPHome at update_interval
   float get_setup_priority() const override { return -10.0f; }
 
   void on_message(MeshPacket *packet, uint8_t *sender_mac);
@@ -34,7 +34,6 @@ class UniversalMeshComponent : public Component {
   };
 
   const char *node_name_{"mesh-node"};
-  uint32_t update_interval_ms_{60000};
   uint32_t heartbeat_interval_ms_{120000};
 
   UniversalMesh mesh_;
@@ -43,7 +42,6 @@ class UniversalMeshComponent : public Component {
   uint8_t mesh_channel_{0};
   bool connected_{false};
 
-  unsigned long last_sensor_{0};
   unsigned long last_heartbeat_{0};
   unsigned long last_retry_{0};
 

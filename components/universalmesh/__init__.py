@@ -8,11 +8,10 @@ DEPENDENCIES = ["wifi"]
 
 universalmesh_ns = cg.esphome_ns.namespace("universalmesh")
 UniversalMeshComponent = universalmesh_ns.class_(
-    "UniversalMeshComponent", cg.Component
+    "UniversalMeshComponent", cg.PollingComponent
 )
 
 CONF_NODE_NAME = "node_name"
-CONF_UPDATE_INTERVAL = "update_interval"
 CONF_HEARTBEAT_INTERVAL = "heartbeat_interval"
 CONF_SENSORS = "sensors"
 CONF_SENSOR_ID = "sensor_id"
@@ -25,15 +24,17 @@ SENSOR_ENTRY_SCHEMA = cv.Schema(
     }
 )
 
-CONFIG_SCHEMA = cv.Schema(
-    {
-        cv.GenerateID(): cv.declare_id(UniversalMeshComponent),
-        cv.Required(CONF_NODE_NAME): cv.string,
-        cv.Optional(CONF_UPDATE_INTERVAL, default="60s"): cv.positive_time_period_milliseconds,
-        cv.Optional(CONF_HEARTBEAT_INTERVAL, default="120s"): cv.positive_time_period_milliseconds,
-        cv.Optional(CONF_SENSORS, default=[]): cv.ensure_list(SENSOR_ENTRY_SCHEMA),
-    }
-).extend(cv.COMPONENT_SCHEMA)
+CONFIG_SCHEMA = (
+    cv.Schema(
+        {
+            cv.GenerateID(): cv.declare_id(UniversalMeshComponent),
+            cv.Required(CONF_NODE_NAME): cv.string,
+            cv.Optional(CONF_HEARTBEAT_INTERVAL, default="120s"): cv.positive_time_period_milliseconds,
+            cv.Optional(CONF_SENSORS, default=[]): cv.ensure_list(SENSOR_ENTRY_SCHEMA),
+        }
+    )
+    .extend(cv.polling_component_schema("60s"))
+)
 
 
 async def to_code(config):
@@ -41,7 +42,6 @@ async def to_code(config):
     await cg.register_component(var, config)
 
     cg.add(var.set_node_name(config[CONF_NODE_NAME]))
-    cg.add(var.set_mesh_update_interval(config[CONF_UPDATE_INTERVAL]))
     cg.add(var.set_heartbeat_interval_ms(config[CONF_HEARTBEAT_INTERVAL]))
 
     for entry in config[CONF_SENSORS]:
