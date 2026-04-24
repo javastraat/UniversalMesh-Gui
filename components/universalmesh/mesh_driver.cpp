@@ -141,7 +141,9 @@ uint8_t UniversalMesh::findCoordinatorChannel(const char* nodeName) {
       while (millis() - startWait < 80) {
         if (_pongReceived) return ch;
         delay(5);
+        #ifdef ESP8266
         ESP.wdtFeed();
+        #endif
       }
     }
   }
