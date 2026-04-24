@@ -7,13 +7,10 @@ esphome:
   name: $devicename
   platformio_options:
     board_build.arduino.memory_type: qio_opi
-
-# esp32:
-#   board: lilygo-t8-s3
-#   variant: esp32s3
-#   framework:
-#     type: arduino
-
+    lib_ignore:
+      - UniversalMesh
+    lib_deps:
+      - https://github.com/johestephan/UniversalMesh
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -33,6 +30,9 @@ wifi:
 
 logger:
   level: INFO
+  logs:
+    wifi: ERROR
+    wifi_esp32: ERROR
 
 external_components:
   - source:

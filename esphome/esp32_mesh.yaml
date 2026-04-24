@@ -5,6 +5,11 @@ substitutions:
 
 esphome:
   name: $devicename
+  platformio_options:
+    lib_ignore:
+      - UniversalMesh
+    lib_deps:
+      - https://github.com/johestephan/UniversalMesh
 
 esp32:
   board: esp32dev

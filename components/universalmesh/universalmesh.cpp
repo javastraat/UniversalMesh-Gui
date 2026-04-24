@@ -78,12 +78,21 @@ bool UniversalMeshComponent::connect_to_coordinator_() {
     ap_active_ = true;
     ESP_LOGI(TAG, "AP locked to ch%d — WiFi probes suppressed", mesh_channel_);
   }
-
-  // Disconnect from any configured networks and disable auto-connect
-  if (WiFi.status() != WL_CONNECTED) {
-    WiFi.disconnect(true);  // true = save credentials but disconnect
-    ESP_LOGD(TAG, "Disconnected from WiFi STA mode");
-  }
+#elif defined(ESP32)
+  // Same trick for ESP32: hidden AP locks the radio to the coordinator's channel,
+  // preventing ESPHome's WiFi STA from restarting the adapter and disrupting ESP-NOW.
+  wifi_config_t ap_cfg = {};
+  memcpy(ap_cfg.ap.ssid, node_name_, strlen(node_name_));
+  ap_cfg.ap.ssid_len = strlen(node_name_);
+  ap_cfg.ap.channel = mesh_channel_;
+  ap_cfg.ap.ssid_hidden = 1;
+  ap_cfg.ap.max_connection = 0;
+  ap_cfg.ap.authmode = WIFI_AUTH_OPEN;
+  esp_wifi_set_mode(WIFI_MODE_APSTA);
+  esp_wifi_set_config(WIFI_IF_AP, &ap_cfg);
+  ap_active_ = true;
+  esp_wifi_disconnect();
+  ESP_LOGI(TAG, "AP locked to ch%d — WiFi probes suppressed", mesh_channel_);
 #endif
 
   connected_ = true;
@@ -100,6 +109,11 @@ void UniversalMeshComponent::loop() {
 #ifdef ESP8266
       if (ap_active_) {
         WiFi.softAPdisconnect(false);
+        ap_active_ = false;
+      }
+#elif defined(ESP32)
+      if (ap_active_) {
+        esp_wifi_set_mode(WIFI_MODE_STA);
         ap_active_ = false;
       }
 #endif
