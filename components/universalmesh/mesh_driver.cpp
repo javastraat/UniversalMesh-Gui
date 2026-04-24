@@ -113,7 +113,7 @@ uint8_t UniversalMesh::findCoordinatorChannel(const char* nodeName) {
   uint8_t broadcastMac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
   uint8_t pingData[] = {0x50, 0x49, 0x4E, 0x47};
   for (uint8_t ch = 1; ch <= 13; ch++) {
-    ESP_LOGI("universalmesh", "Scanning channel %d...", ch);
+    UM_DEBUG_PRINTF("[MESH] Scanning channel %d...\n", ch);
     #if defined(ESP8266)
       ESP.wdtFeed();  // 13-channel scan blocks ~3 s — keep HW WDT alive
       wifi_set_channel(ch);
