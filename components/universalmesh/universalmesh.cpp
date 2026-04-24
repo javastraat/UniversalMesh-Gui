@@ -18,11 +18,8 @@ static void on_mesh_message(MeshPacket *packet, uint8_t *sender_mac) {
   if (instance_) instance_->on_message(packet, sender_mac);
 }
 
-// ---------------------------------------------------------------------------
-
 void UniversalMeshComponent::setup() {
   instance_ = this;
-
   WiFi.macAddress(my_mac_);
   ESP_LOGI(TAG, "MAC: %02X:%02X:%02X:%02X:%02X:%02X",
            my_mac_[0], my_mac_[1], my_mac_[2],
@@ -48,19 +45,15 @@ bool UniversalMeshComponent::connect_to_coordinator_() {
   mesh_.begin(mesh_channel_);
   mesh_.setCoordinatorMac(coordinator_mac_);
   mesh_.onReceive(on_mesh_message);
-
   WiFi.macAddress(my_mac_);
 
   mesh_.send(coordinator_mac_, MESH_TYPE_PING, 0x00,
              (const uint8_t *)node_name_, strlen(node_name_), 4);
   mesh_.send(coordinator_mac_, MESH_TYPE_DATA, 0x06,
              (const uint8_t *)node_name_, strlen(node_name_), 4);
-
   connected_ = true;
   return true;
 }
-
-// ---------------------------------------------------------------------------
 
 void UniversalMeshComponent::loop() {
   mesh_.update();
@@ -90,8 +83,6 @@ void UniversalMeshComponent::loop() {
     send_sensors_();
   }
 }
-
-// ---------------------------------------------------------------------------
 
 void UniversalMeshComponent::send_heartbeat_() {
   uint8_t hb = 0x01;
@@ -132,7 +123,6 @@ void UniversalMeshComponent::send_info_(uint8_t *dest_mac, uint8_t app_id) {
   snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
            my_mac_[0], my_mac_[1], my_mac_[2],
            my_mac_[3], my_mac_[4], my_mac_[5]);
-
   JsonDocument doc;
   doc["n"]    = node_name_;
   doc["mac"]  = mac_str;
@@ -145,13 +135,10 @@ void UniversalMeshComponent::send_info_(uint8_t *dest_mac, uint8_t app_id) {
 #else
   doc["chip"] = "ESP8266";
 #endif
-
   String out;
   serializeJson(doc, out);
   mesh_.send(dest_mac, MESH_TYPE_DATA, app_id, out);
 }
-
-// ---------------------------------------------------------------------------
 
 void UniversalMeshComponent::on_message(MeshPacket *packet, uint8_t *sender_mac) {
   bool direct_to_me = (memcmp(packet->destMac, my_mac_, 6) == 0);
@@ -162,19 +149,10 @@ void UniversalMeshComponent::on_message(MeshPacket *packet, uint8_t *sender_mac)
   memcpy(msg, packet->payload, len);
   msg[len] = '\0';
 
-  ESP_LOGD(TAG, "RX from %02X:%02X:%02X:%02X:%02X:%02X app=0x%02X: %s",
-           sender_mac[0], sender_mac[1], sender_mac[2],
-           sender_mac[3], sender_mac[4], sender_mac[5],
-           packet->appId, msg);
-
   if (len < 4 || strncmp(msg, "cmd:", 4) != 0) return;
-
-  bool from_coordinator = connected_ &&
-                          (memcmp(sender_mac, coordinator_mac_, 6) == 0);
-  if (!from_coordinator) return;
+  if (!connected_ || memcmp(sender_mac, coordinator_mac_, 6) != 0) return;
 
   const char *command = msg + 4;
-
   char ack[220];
   snprintf(ack, sizeof(ack), "command received:%s", command);
   mesh_.send(sender_mac, MESH_TYPE_DATA, packet->appId,

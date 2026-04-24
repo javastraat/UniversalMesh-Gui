@@ -2,7 +2,7 @@
 
 #include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
-#include "UniversalMesh.h"
+#include "lib/UniversalMesh.h"
 
 #include <ArduinoJson.h>
 #include <vector>
@@ -23,7 +23,7 @@ class UniversalMeshComponent : public Component {
 
   void setup() override;
   void loop() override;
-  float get_setup_priority() const override { return -10.0f; }  // after WiFi (10.0f)
+  float get_setup_priority() const override { return -10.0f; }
 
   void on_message(MeshPacket *packet, uint8_t *sender_mac);
 

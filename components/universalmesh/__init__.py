@@ -1,9 +1,7 @@
-import os
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.const import CONF_ID
 from esphome.components import sensor
-from esphome.core import CORE
 
 CODEOWNERS = ["@johestephan"]
 DEPENDENCIES = ["wifi"]
@@ -50,15 +48,4 @@ async def to_code(config):
         sens = await cg.get_variable(entry[CONF_SENSOR_ID])
         cg.add(var.register_sensor(entry[CONF_KEY], sens))
 
-    # Add our component dir to include path so mbedtls/aes.h stub is found
-    # (ESPHome copies component sources to this path before compilation)
-    component_dir = os.path.join(
-        str(CORE.build_path), "src", "esphome", "components", "universalmesh"
-    )
-    cg.add_build_flag(f"-I{component_dir}")
-
-    cg.add_library(
-        "UniversalMesh",
-        None,
-        "https://github.com/johestephan/UniversalMesh",
-    )
+    # UniversalMesh is vendored in lib/ — no external library needed
