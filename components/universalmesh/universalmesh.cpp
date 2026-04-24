@@ -28,12 +28,12 @@ void UniversalMeshComponent::setup() {
   mesh_.begin(1);
   mesh_.onReceive(on_mesh_message);
 
-  if (connect_to_coordinator_()) {
-    ESP_LOGI(TAG, "Coordinator found on channel %d", mesh_channel_);
-    last_heartbeat_ = millis() - heartbeat_interval_ms_;
-  } else {
-    ESP_LOGW(TAG, "Coordinator not found — will retry every 30s");
-  }
+  // WiFi probe requests and ESP-NOW share the ESP8266 radio. Scanning all 13
+  // channels during setup() collides with the WiFi initial connection attempt,
+  // causing PONG packets to be lost. Defer the first scan until WiFi has
+  // settled (~10 s after boot).
+  last_retry_ = millis() - 20000;
+  ESP_LOGI(TAG, "Coordinator scan deferred — first attempt in ~10s");
 }
 
 bool UniversalMeshComponent::connect_to_coordinator_() {
