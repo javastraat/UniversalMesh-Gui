@@ -59,6 +59,12 @@ bool UniversalMeshComponent::connect_to_coordinator_() {
     ap_active_ = true;
     ESP_LOGI(TAG, "AP locked to ch%d — WiFi probes suppressed", mesh_channel_);
   }
+
+  // Disconnect from any configured networks and disable auto-connect
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.disconnect(true);  // true = save credentials but disconnect
+    ESP_LOGD(TAG, "Disconnected from WiFi STA mode");
+  }
 #endif
 
   connected_ = true;
@@ -94,6 +100,13 @@ void UniversalMeshComponent::loop() {
     last_heartbeat_ = now;
     send_heartbeat_();
   }
+
+#ifdef ESP8266
+  // Ensure WiFi STA stays disconnected after coordinator is found
+  if (connected_ && ap_active_ && WiFi.status() != WL_CONNECTED) {
+    WiFi.disconnect(true);
+  }
+#endif
 }
 
 void UniversalMeshComponent::update() {
