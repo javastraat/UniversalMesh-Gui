@@ -48,4 +48,4 @@ async def to_code(config):
         sens = await cg.get_variable(entry[CONF_SENSOR_ID])
         cg.add(var.register_sensor(entry[CONF_KEY], sens))
 
-    # UniversalMesh is vendored in lib/ — no external library needed
+    cg.add_library("ArduinoJson", "^7.0.0")
