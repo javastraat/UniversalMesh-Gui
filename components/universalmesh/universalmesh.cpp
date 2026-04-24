@@ -28,12 +28,14 @@ void UniversalMeshComponent::setup() {
   mesh_.begin(1);
   mesh_.onReceive(on_mesh_message);
 
+
 #ifdef ESP8266
   // CRITICAL: Disable WiFi STA scanning to prevent probe requests from disrupting ESP-NOW.
   // Disconnect saves credentials but drops any active connection; autoConnect keeps radio stable.
   if (WiFi.status() != WL_CONNECTED) {
     WiFi.disconnect(true);  // true = save credentials but disconnect
     ESP_LOGI(TAG, "WiFi STA disabled — radio stable for ESP-NOW discovery");
+    delay(100); // Let radio settle after WiFi disconnect
   }
 #endif
 

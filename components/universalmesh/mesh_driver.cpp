@@ -113,6 +113,7 @@ uint8_t UniversalMesh::findCoordinatorChannel(const char* nodeName) {
   uint8_t broadcastMac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
   uint8_t pingData[] = {0x50, 0x49, 0x4E, 0x47};
   for (uint8_t ch = 1; ch <= 13; ch++) {
+    ESP_LOGI("universalmesh", "Scanning channel %d...", ch);
     #if defined(ESP8266)
       ESP.wdtFeed();  // 13-channel scan blocks ~3 s — keep HW WDT alive
       wifi_set_channel(ch);
@@ -129,16 +130,18 @@ uint8_t UniversalMesh::findCoordinatorChannel(const char* nodeName) {
       if (esp_now_is_peer_exist(broadcastMac)) esp_now_mod_peer(&peerInfo);
       else esp_now_add_peer(&peerInfo);
     #endif
-    delay(10);
+    delay(20); // Let radio settle
     _pongReceived = false;
     // Send 3 PINGs per channel so a single WiFi probe collision doesn't lose
     // the whole channel — ESP-NOW is fire-and-forget with no retransmits.
     for (uint8_t attempt = 0; attempt < 3; attempt++) {
+      if (broadcastMac == nullptr || pingData == nullptr) continue;
       esp_now_send(broadcastMac, pingData, sizeof(pingData));
       unsigned long startWait = millis();
       while (millis() - startWait < 80) {
         if (_pongReceived) return ch;
         delay(5);
+        ESP.wdtFeed();
       }
     }
   }
