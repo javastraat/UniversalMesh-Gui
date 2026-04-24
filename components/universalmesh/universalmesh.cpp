@@ -35,7 +35,7 @@ void UniversalMeshComponent::setup() {
   if (WiFi.status() != WL_CONNECTED) {
     WiFi.disconnect(true);  // true = save credentials but disconnect
     ESP_LOGI(TAG, "WiFi STA disabled — radio stable for ESP-NOW discovery");
-    delay(100); // Let radio settle after WiFi disconnect
+    delay(200); // Let radio settle after WiFi disconnect (increased for ESP8266 stability)
   }
 #endif
 

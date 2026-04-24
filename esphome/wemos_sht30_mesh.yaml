@@ -13,10 +13,11 @@ esp8266:
   board: d1_mini
 
 wifi:
-  ssid: "no-mesh-wifi"
-  password: "no-mesh-wifi"
+  ssid: "dummy"
+  password: "dummy"
+  fast_connect: true
   reboot_timeout: 0s
-  fast_connect: true    # skip scanning, fail fast, leave radio stable for ESP-NOW
+  power_save_mode: NONE
 
 # no api: — coordinator bridges to HA instead
 # no captive_portal
