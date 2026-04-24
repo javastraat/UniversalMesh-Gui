@@ -24,6 +24,10 @@ wifi:
 
 logger:
   level: INFO
+  # logs:
+  #   wifi: ERROR
+  #   wifi_esp8266: ERROR
+  #   component: ERROR
 
 external_components:
   - source:
