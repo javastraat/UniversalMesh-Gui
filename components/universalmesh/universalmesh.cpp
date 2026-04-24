@@ -37,12 +37,6 @@ void UniversalMeshComponent::setup() {
 }
 
 bool UniversalMeshComponent::connect_to_coordinator_() {
-#ifdef ESP8266
-  // WiFi STA probe requests and ESP-NOW share the ESP8266 radio. Pause STA for
-  // the duration of the channel sweep so PONG packets aren't clobbered.
-  wifi_station_disconnect();
-  delay(20);
-#endif
   mesh_channel_ = mesh_.findCoordinatorChannel(node_name_);
   if (mesh_channel_ == 0) return false;
 
@@ -67,6 +61,12 @@ void UniversalMeshComponent::loop() {
     if (millis() - last_retry_ > 30000) {
       last_retry_ = millis();
       ESP_LOGI(TAG, "Scanning for coordinator...");
+#ifdef ESP8266
+      // Pause WiFi STA before reinitializing ESP-NOW — disconnect must come
+      // first or it will invalidate the ESP-NOW init that follows.
+      wifi_station_disconnect();
+      delay(20);
+#endif
       mesh_.begin(1);  // reinit ESP-NOW — WiFi adapter restarts deinit it
       mesh_.onReceive(on_mesh_message);
       if (connect_to_coordinator_()) {
