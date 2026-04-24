@@ -88,13 +88,15 @@ bool UniversalMeshComponent::connect_to_coordinator_() {
   ap_cfg.ap.ssid_hidden = 1;
   ap_cfg.ap.max_connection = 0;
   ap_cfg.ap.authmode = WIFI_AUTH_OPEN;
+  // APSTA needed only to configure AP; then drop to AP-only so ESPHome's WiFi
+  // STA can no longer restart the adapter (which destroys ESP-NOW each time).
   esp_wifi_set_mode(WIFI_MODE_APSTA);
   esp_wifi_set_config(WIFI_IF_AP, &ap_cfg);
+  esp_wifi_set_mode(WIFI_MODE_AP);
   ap_active_ = true;
-  esp_wifi_disconnect();
-  ESP_LOGI(TAG, "AP locked to ch%d — WiFi probes suppressed", mesh_channel_);
-  // APSTA mode resets the WiFi stack and removes ESP-NOW peers; reinit so the
-  // broadcast peer is registered again before sensor data is sent.
+  ESP_LOGI(TAG, "AP locked to ch%d — STA disabled, adapter restarts stopped", mesh_channel_);
+  // AP mode switch resets ESP-NOW peers; reinit so the broadcast peer is
+  // registered again before the first sensor send.
   mesh_.begin(mesh_channel_);
   mesh_.onReceive(on_mesh_message);
 #endif
