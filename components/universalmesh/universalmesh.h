@@ -14,7 +14,7 @@ namespace universalmesh {
 class UniversalMeshComponent : public Component {
  public:
   void set_node_name(const char *name) { node_name_ = name; }
-  void set_update_interval_ms(uint32_t ms) { update_interval_ms_ = ms; }
+  void set_mesh_update_interval(uint32_t ms) { update_interval_ms_ = ms; }
   void set_heartbeat_interval_ms(uint32_t ms) { heartbeat_interval_ms_ = ms; }
 
   void register_sensor(const char *key, sensor::Sensor *s) {

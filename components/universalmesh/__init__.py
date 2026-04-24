@@ -41,7 +41,7 @@ async def to_code(config):
     await cg.register_component(var, config)
 
     cg.add(var.set_node_name(config[CONF_NODE_NAME]))
-    cg.add(var.set_update_interval_ms(config[CONF_UPDATE_INTERVAL]))
+    cg.add(var.set_mesh_update_interval(config[CONF_UPDATE_INTERVAL]))
     cg.add(var.set_heartbeat_interval_ms(config[CONF_HEARTBEAT_INTERVAL]))
 
     for entry in config[CONF_SENSORS]:
