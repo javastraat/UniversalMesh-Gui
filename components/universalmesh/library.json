@@ -1,0 +1,6 @@
+{
+  "name": "universalmesh-esphome",
+  "version": "1.0.0",
+  "description": "UniversalMesh ESPHome external component",
+  "dependencies": []
+}
