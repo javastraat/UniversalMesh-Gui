@@ -93,6 +93,10 @@ bool UniversalMeshComponent::connect_to_coordinator_() {
   ap_active_ = true;
   esp_wifi_disconnect();
   ESP_LOGI(TAG, "AP locked to ch%d — WiFi probes suppressed", mesh_channel_);
+  // APSTA mode resets the WiFi stack and removes ESP-NOW peers; reinit so the
+  // broadcast peer is registered again before sensor data is sent.
+  mesh_.begin(mesh_channel_);
+  mesh_.onReceive(on_mesh_message);
 #endif
 
   connected_ = true;
@@ -111,6 +115,11 @@ void UniversalMeshComponent::loop() {
         WiFi.softAPdisconnect(false);
         ap_active_ = false;
       }
+      // ESPHome's WiFi component may have restarted the adapter between retries,
+      // leaving ESP-NOW in an invalid state. Calling esp_now_deinit() on an
+      // already-torn-down adapter causes Exception 3 (LoadStoreError). A short
+      // settle delay lets the adapter finish its restart before we reinit.
+      delay(500);
 #elif defined(ESP32)
       if (ap_active_) {
         esp_wifi_set_mode(WIFI_MODE_STA);
