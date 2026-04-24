@@ -32,6 +32,11 @@ void UniversalMeshComponent::setup() {
   mesh_.begin(1);
   mesh_.onReceive(on_mesh_message);
 
+#ifdef ESP32
+  // Disconnect STA so WiFi doesn't hop channels during ESP-NOW scanning.
+  // Mesh nodes don't need WiFi — the coordinator bridges to HA.
+  esp_wifi_disconnect();
+#endif
 
 #ifdef ESP8266
   // CRITICAL: Disable WiFi STA scanning to prevent probe requests from disrupting ESP-NOW.

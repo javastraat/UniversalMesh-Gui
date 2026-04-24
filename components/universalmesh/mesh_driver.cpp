@@ -43,7 +43,7 @@ bool UniversalMesh::begin(uint8_t channel, MeshRole role) {
     esp_now_register_recv_cb(espNowRecvWrapper);
     esp_now_peer_info_t peer = {};
     memcpy(peer.peer_addr, _broadcastMac, 6);
-    peer.channel = channel;
+    peer.channel = 0;  // 0 = follow current WiFi channel
     esp_now_add_peer(&peer);
   #endif
   UM_DEBUG_PRINTF("[MESH] ESP-NOW Initialized %02X:%02X:%02X:%02X:%02X:%02X\n",
@@ -112,6 +112,11 @@ bool UniversalMesh::sendSecureToCoordinator(uint8_t appId, String payload) {
 uint8_t UniversalMesh::findCoordinatorChannel(const char* nodeName) {
   uint8_t broadcastMac[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
   uint8_t pingData[] = {0x50, 0x49, 0x4E, 0x47};
+  #if defined(ESP32)
+  // Keep promiscuous ON for the entire scan so WiFi can't change the channel
+  // between esp_wifi_set_channel() and esp_now_send().
+  esp_wifi_set_promiscuous(true);
+  #endif
   for (uint8_t ch = 1; ch <= 13; ch++) {
     UM_DEBUG_PRINTF("[MESH] Scanning channel %d...\n", ch);
     #if defined(ESP8266)
@@ -120,12 +125,10 @@ uint8_t UniversalMesh::findCoordinatorChannel(const char* nodeName) {
       if (esp_now_is_peer_exist(broadcastMac)) esp_now_del_peer(broadcastMac);
       esp_now_add_peer(broadcastMac, ESP_NOW_ROLE_COMBO, ch, NULL, 0);
     #elif defined(ESP32)
-      esp_wifi_set_promiscuous(true);
       esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
-      esp_wifi_set_promiscuous(false);
       esp_now_peer_info_t peerInfo = {};
       memcpy(peerInfo.peer_addr, broadcastMac, 6);
-      peerInfo.channel = ch;
+      peerInfo.channel = 0;  // 0 = follow current WiFi channel
       peerInfo.encrypt = false;
       if (esp_now_is_peer_exist(broadcastMac)) esp_now_mod_peer(&peerInfo);
       else esp_now_add_peer(&peerInfo);
@@ -147,6 +150,9 @@ uint8_t UniversalMesh::findCoordinatorChannel(const char* nodeName) {
       }
     }
   }
+  #if defined(ESP32)
+  esp_wifi_set_promiscuous(false);
+  #endif
   return 0;
 }
 
