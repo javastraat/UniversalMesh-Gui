@@ -44,6 +44,7 @@ class UniversalMeshComponent : public PollingComponent {
   uint8_t coordinator_mac_[6]{};
   uint8_t mesh_channel_{0};
   bool connected_{false};
+  bool ap_active_{false};
 
   unsigned long last_heartbeat_{0};
   unsigned long last_retry_{0};

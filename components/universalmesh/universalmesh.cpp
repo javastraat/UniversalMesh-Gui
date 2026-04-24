@@ -55,8 +55,10 @@ bool UniversalMeshComponent::connect_to_coordinator_() {
   // Start a hidden soft-AP on the coordinator's channel. On ESP8266 the AP
   // channel takes priority over STA scanning, so the radio is locked to this
   // channel and WiFi probes can no longer disrupt ESP-NOW traffic.
-  WiFi.softAP(node_name_, "", mesh_channel_, true /* hidden */);
-  ESP_LOGI(TAG, "AP locked to ch%d — WiFi probes suppressed", mesh_channel_);
+  if (WiFi.softAP(node_name_, "", mesh_channel_, true /* hidden */)) {
+    ap_active_ = true;
+    ESP_LOGI(TAG, "AP locked to ch%d — WiFi probes suppressed", mesh_channel_);
+  }
 #endif
 
   connected_ = true;
@@ -71,7 +73,10 @@ void UniversalMeshComponent::loop() {
       last_retry_ = millis();
       ESP_LOGI(TAG, "Scanning for coordinator...");
 #ifdef ESP8266
-      WiFi.softAPdisconnect(true);  // release channel lock so scan can switch channels
+      if (ap_active_) {
+        WiFi.softAPdisconnect(false);
+        ap_active_ = false;
+      }
 #endif
       mesh_.begin(1);  // reinit ESP-NOW — WiFi adapter restarts deinit it
       mesh_.onReceive(on_mesh_message);

@@ -114,6 +114,7 @@ uint8_t UniversalMesh::findCoordinatorChannel(const char* nodeName) {
   uint8_t pingData[] = {0x50, 0x49, 0x4E, 0x47};
   for (uint8_t ch = 1; ch <= 13; ch++) {
     #if defined(ESP8266)
+      ESP.wdtFeed();  // 13-channel scan blocks ~3 s — keep HW WDT alive
       wifi_set_channel(ch);
       if (esp_now_is_peer_exist(broadcastMac)) esp_now_del_peer(broadcastMac);
       esp_now_add_peer(broadcastMac, ESP_NOW_ROLE_COMBO, ch, NULL, 0);
