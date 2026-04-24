@@ -37,6 +37,12 @@ void UniversalMeshComponent::setup() {
 }
 
 bool UniversalMeshComponent::connect_to_coordinator_() {
+#ifdef ESP8266
+  // WiFi STA probe requests and ESP-NOW share the ESP8266 radio. Pause STA for
+  // the duration of the channel sweep so PONG packets aren't clobbered.
+  wifi_station_disconnect();
+  delay(20);
+#endif
   mesh_channel_ = mesh_.findCoordinatorChannel(node_name_);
   if (mesh_channel_ == 0) return false;
 
