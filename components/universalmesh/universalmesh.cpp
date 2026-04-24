@@ -61,12 +61,6 @@ void UniversalMeshComponent::loop() {
     if (millis() - last_retry_ > 30000) {
       last_retry_ = millis();
       ESP_LOGI(TAG, "Scanning for coordinator...");
-#ifdef ESP8266
-      // Pause WiFi STA before reinitializing ESP-NOW — disconnect must come
-      // first or it will invalidate the ESP-NOW init that follows.
-      wifi_station_disconnect();
-      delay(20);
-#endif
       mesh_.begin(1);  // reinit ESP-NOW — WiFi adapter restarts deinit it
       mesh_.onReceive(on_mesh_message);
       if (connect_to_coordinator_()) {

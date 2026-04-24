@@ -130,11 +130,15 @@ uint8_t UniversalMesh::findCoordinatorChannel(const char* nodeName) {
     #endif
     delay(10);
     _pongReceived = false;
-    esp_now_send(broadcastMac, pingData, sizeof(pingData));
-    unsigned long startWait = millis();
-    while (millis() - startWait < 150) {
-      if (_pongReceived) return ch;
-      delay(5);
+    // Send 3 PINGs per channel so a single WiFi probe collision doesn't lose
+    // the whole channel — ESP-NOW is fire-and-forget with no retransmits.
+    for (uint8_t attempt = 0; attempt < 3; attempt++) {
+      esp_now_send(broadcastMac, pingData, sizeof(pingData));
+      unsigned long startWait = millis();
+      while (millis() - startWait < 80) {
+        if (_pongReceived) return ch;
+        delay(5);
+      }
     }
   }
   return 0;
