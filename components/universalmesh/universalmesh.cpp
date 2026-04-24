@@ -28,12 +28,16 @@ void UniversalMeshComponent::setup() {
   mesh_.begin(1);
   mesh_.onReceive(on_mesh_message);
 
-  // WiFi probe requests and ESP-NOW share the ESP8266 radio. Scanning all 13
-  // channels during setup() collides with the WiFi initial connection attempt,
-  // causing PONG packets to be lost. Defer the first scan until WiFi has
-  // settled (~10 s after boot).
-  last_retry_ = millis() - 20000;
-  ESP_LOGI(TAG, "Coordinator scan deferred — first attempt in ~10s");
+#ifdef ESP8266
+  // CRITICAL: Disable WiFi STA scanning to prevent probe requests from disrupting ESP-NOW.
+  // Disconnect saves credentials but drops any active connection; autoConnect keeps radio stable.
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.disconnect(true);  // true = save credentials but disconnect
+    ESP_LOGI(TAG, "WiFi STA disabled — radio stable for ESP-NOW discovery");
+  }
+#endif
+
+  last_retry_ = millis();
 }
 
 bool UniversalMeshComponent::connect_to_coordinator_() {
