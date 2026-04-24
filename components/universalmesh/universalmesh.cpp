@@ -3,8 +3,8 @@
 
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
-#else
-#include <WiFi.h>
+#elif defined(ESP32)
+#include <esp_wifi.h>
 #endif
 
 namespace esphome {
@@ -20,7 +20,11 @@ static void on_mesh_message(MeshPacket *packet, uint8_t *sender_mac) {
 
 void UniversalMeshComponent::setup() {
   instance_ = this;
+#ifdef ESP8266
   WiFi.macAddress(my_mac_);
+#else
+  esp_wifi_get_mac(WIFI_IF_STA, my_mac_);
+#endif
   ESP_LOGI(TAG, "MAC: %02X:%02X:%02X:%02X:%02X:%02X",
            my_mac_[0], my_mac_[1], my_mac_[2],
            my_mac_[3], my_mac_[4], my_mac_[5]);
@@ -50,7 +54,11 @@ bool UniversalMeshComponent::connect_to_coordinator_() {
   mesh_.begin(mesh_channel_);
   mesh_.setCoordinatorMac(coordinator_mac_);
   mesh_.onReceive(on_mesh_message);
+#ifdef ESP8266
   WiFi.macAddress(my_mac_);
+#else
+  esp_wifi_get_mac(WIFI_IF_STA, my_mac_);
+#endif
 
   mesh_.send(coordinator_mac_, MESH_TYPE_PING, 0x00,
              (const uint8_t *)node_name_, strlen(node_name_), 4);

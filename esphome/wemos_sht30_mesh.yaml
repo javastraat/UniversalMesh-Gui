@@ -16,7 +16,7 @@ esp8266:
 
 wifi:
   ssid: "dummy"
-  password: "dummy"
+  password: "dummypass"
   fast_connect: true
   reboot_timeout: 0s
   power_save_mode: NONE

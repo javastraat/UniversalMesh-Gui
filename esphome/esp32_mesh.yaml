@@ -1,0 +1,52 @@
+substitutions:
+  devicename: esp32-mesh
+  node_name: esp32-node
+  version: "1.0"
+
+esphome:
+  name: $devicename
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+wifi:
+  ssid: "dummy"
+  password: "dummy"
+  fast_connect: true
+  reboot_timeout: 0s
+  power_save_mode: NONE
+
+# no api: — coordinator bridges to HA instead
+# no captive_portal
+# no ota via wifi — use coordinator mesh OTA
+
+logger:
+  level: INFO
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/javastraat/UniversalMeshGui
+      ref: main
+    components: [universalmesh]
+
+universalmesh:
+  id: mesh_node
+  node_name: $node_name
+  update_interval: 60s
+  heartbeat_interval: 120s
+  sensors:
+    - sensor_id: temperature
+      key: temp
+
+sensor:
+  - platform: internal_temperature
+    name: "CPU Temperature"
+    id: temperature
+    update_interval: 10s
+
+  - platform: uptime
+    id: uptime_s
+    update_interval: 10s

@@ -23,7 +23,6 @@
   #include <ESP8266WiFi.h>
   #include <espnow.h>
 #elif defined(ESP32)
-  #include <WiFi.h>
   #include <esp_now.h>
   #include <esp_wifi.h>
 #endif
