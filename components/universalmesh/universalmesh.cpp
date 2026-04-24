@@ -61,6 +61,8 @@ void UniversalMeshComponent::loop() {
     if (millis() - last_retry_ > 30000) {
       last_retry_ = millis();
       ESP_LOGI(TAG, "Scanning for coordinator...");
+      mesh_.begin(1);  // reinit ESP-NOW — WiFi adapter restarts deinit it
+      mesh_.onReceive(on_mesh_message);
       if (connect_to_coordinator_()) {
         ESP_LOGI(TAG, "Coordinator found on channel %d", mesh_channel_);
         last_heartbeat_ = millis() - heartbeat_interval_ms_;

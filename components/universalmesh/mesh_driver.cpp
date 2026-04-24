@@ -32,6 +32,7 @@ bool UniversalMesh::begin(uint8_t channel, MeshRole role) {
     WiFi.macAddress(_myMac);
   #endif
 
+  esp_now_deinit();  // safe to call even if not initialized; ensures clean reinit after WiFi adapter restart
   if (esp_now_init() != 0) return false;
 
   #if defined(ESP8266)

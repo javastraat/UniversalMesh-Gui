@@ -1,6 +1,7 @@
 substitutions:
   devicename: wemos-sht30-mesh
   node_name: wemos-sht30
+  version: "1.0"
 
 esphome:
   name: $devicename
@@ -14,8 +15,8 @@ esp8266:
 wifi:
   ssid: "no-mesh-wifi"
   password: "no-mesh-wifi"
-  reboot_timeout: 0s   # never reboot on wifi failure
-  # no ap: — we don't want a fallback AP
+  reboot_timeout: 0s
+  fast_connect: true    # skip scanning, fail fast, leave radio stable for ESP-NOW
 
 # no api: — coordinator bridges to HA instead
 # no captive_portal
@@ -32,6 +33,7 @@ external_components:
     components: [universalmesh]
 
 universalmesh:
+  id: mesh_node
   node_name: $node_name
   update_interval: 60s
   heartbeat_interval: 120s
@@ -55,3 +57,88 @@ sensor:
       name: "SHT30 Humidity"
       id: humidity
     update_interval: 10s
+
+  - platform: uptime
+    id: uptime_s
+    update_interval: 10s
+
+text_sensor:
+  - platform: template
+    id: uptime_human
+    update_interval: 30s
+    lambda: |-
+      uint32_t s = (uint32_t)id(uptime_s).state;
+      if (s < 60) return str_sprintf("%ds", s);
+      if (s < 3600) return str_sprintf("%dm%ds", s / 60, s % 60);
+      return str_sprintf("%dh%dm", s / 3600, (s % 3600) / 60);
+
+globals:
+  - id: display_page
+    type: int
+    restore_value: false
+    initial_value: "0"
+
+interval:
+  - interval: 2s
+    then:
+      - lambda: |-
+          id(display_page) = (id(display_page) + 1) % 3;
+          id(oled).update();
+
+font:
+  - file: "fonts/Arial.ttf"
+    id: font_large
+    size: 18
+  - file: "fonts/Arial.ttf"
+    id: font_small
+    size: 11
+  - file: "fonts/Arial.ttf"
+    id: font_mid
+    size: 13
+
+display:
+  - platform: ssd1306_i2c
+    id: oled
+    model: "SSD1306 64x48"
+    address: 0x3C
+    reset_pin: GPIO16
+    update_interval: never
+    lambda: |-
+      int page = id(display_page);
+
+      if (page == 0) {
+        // Page 1: Mesh status
+        bool conn = id(mesh_node).is_connected();
+        it.print(32, 0, id(font_mid), TextAlign::CENTER_HORIZONTAL, conn ? "Mesh OK" : "No mesh");
+        if (conn) {
+          it.printf(32, 14, id(font_small), TextAlign::CENTER_HORIZONTAL, "CH %d", id(mesh_node).get_mesh_channel());
+        } else {
+          it.print(32, 14, id(font_small), TextAlign::CENTER_HORIZONTAL, "Searching");
+        }
+        it.printf(32, 27, id(font_small), TextAlign::CENTER_HORIZONTAL, "Up:%s",
+                  id(uptime_human).has_state() ? id(uptime_human).state.c_str() : "...");
+        it.printf(0,  40, id(font_small), TextAlign::LEFT,   "v$version");
+        it.print(64, 40, id(font_small),  TextAlign::RIGHT,  "1/3");
+
+      } else if (page == 1) {
+        // Page 2: Temperature
+        if (id(temperature).has_state()) {
+          it.printf(32, 10, id(font_large), TextAlign::CENTER, "%.1f", id(temperature).state);
+        } else {
+          it.print(32, 10, id(font_large), TextAlign::CENTER, "--.-");
+        }
+        it.print(32, 30, id(font_small), TextAlign::CENTER, "Celsius");
+        it.printf(0,  40, id(font_small), TextAlign::LEFT,   "v$version");
+        it.print(64, 40, id(font_small),  TextAlign::RIGHT,  "2/3");
+
+      } else {
+        // Page 3: Humidity
+        if (id(humidity).has_state()) {
+          it.printf(32, 10, id(font_large), TextAlign::CENTER, "%.1f", id(humidity).state);
+        } else {
+          it.print(32, 10, id(font_large), TextAlign::CENTER, "--.-");
+        }
+        it.print(32, 30, id(font_small), TextAlign::CENTER, "% RH");
+        it.printf(0,  40, id(font_small), TextAlign::LEFT,   "v$version");
+        it.print(64, 40, id(font_small),  TextAlign::RIGHT,  "3/3");
+      }

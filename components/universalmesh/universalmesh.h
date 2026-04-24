@@ -27,6 +27,9 @@ class UniversalMeshComponent : public PollingComponent {
 
   void on_message(MeshPacket *packet, uint8_t *sender_mac);
 
+  bool is_connected() const { return connected_; }
+  uint8_t get_mesh_channel() const { return mesh_channel_; }
+
  protected:
   struct SensorEntry {
     std::string key;
