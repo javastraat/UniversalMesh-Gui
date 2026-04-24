@@ -49,3 +49,4 @@ async def to_code(config):
         cg.add(var.register_sensor(entry[CONF_KEY], sens))
 
     cg.add_library("ArduinoJson", "^7.0.0")
+    cg.add_library("https://github.com/johestephan/UniversalMesh", None)

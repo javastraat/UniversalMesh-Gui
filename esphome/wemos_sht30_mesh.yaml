@@ -5,11 +5,6 @@ substitutions:
 
 esphome:
   name: $devicename
-  platformio_options:
-    lib_ignore:
-      - UniversalMesh
-    lib_deps:
-      - https://github.com/johestephan/UniversalMesh
 
 esp8266:
   board: d1_mini
