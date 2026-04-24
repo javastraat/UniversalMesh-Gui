@@ -1,0 +1,52 @@
+substitutions:
+  devicename: wemos-sht30-mesh
+  node_name: wemos-sht30
+
+esphome:
+  name: $devicename
+
+esp8266:
+  board: d1_mini
+
+wifi:
+  ssid: "no-mesh-wifi"
+  password: "no-mesh-wifi"
+  reboot_timeout: 0s   # never reboot on wifi failure
+  # no ap: — we don't want a fallback AP
+
+# no api: — coordinator bridges to HA instead
+# no captive_portal
+# no ota via wifi — use coordinator mesh OTA
+
+logger:
+  level: INFO
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+universalmesh:
+  node_name: $node_name
+  update_interval: 60s
+  heartbeat_interval: 120s
+  sensors:
+    - sensor_id: temperature
+      key: temp
+    - sensor_id: humidity
+      key: hum
+
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+
+sensor:
+  - platform: sht3xd
+    address: 0x45
+    temperature:
+      name: "SHT30 Temperature"
+      id: temperature
+    humidity:
+      name: "SHT30 Humidity"
+      id: humidity
+    update_interval: 10s
